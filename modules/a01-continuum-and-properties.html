@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+
+<html data-theme="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<title>Learning to see a fluid · CFD Field Notes</title>
+<link href="../assets/vendor/katex/katex.min.css" rel="stylesheet"/>
+<link href="../assets/course.css" rel="stylesheet"/>
+<style>
+.scales-wrap{min-height:180px}
+.props{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (min-width:760px){.props{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.props .pc{background:var(--paper);border:1px solid var(--rule);border-radius:4px;padding:8px 8px 4px}
+.props .pt{font:600 13px/1.2 var(--display);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.props .pv{font:600 15px/1.3 var(--mono);font-variant-numeric:tabular-nums}
+</style>
+<link href="../assets/field-notes.css" rel="stylesheet"/></head>
+<body class="chapter">
+<div class="topbar"><a href="../index.html">← Field Notes</a><button class="themebtn" type="button">Theme: auto</button></div>
+<nav aria-label="Sections" class="tabs"><div class="in" id="tabs">
+<a href="#s1"><span class="n">01</span>Continuum</a>
+<a href="#s2"><span class="n">02</span>Fields</a>
+<a href="#s3"><span class="n">03</span>Density, pressure</a>
+<a href="#s4"><span class="n">04</span>Viscosity</a>
+<a href="#s5"><span class="n">05</span>Heat</a>
+<a href="#s6"><span class="n">06</span>Water</a>
+<a href="#s7"><span class="n">07</span>OpenFOAM</a>
+<a href="#s8"><span class="n">08</span>Check</a>
+<a href="#s9"><span class="n">09</span>Sources</a>
+<a href="#s10"><span class="n">10</span>Words</a>
+</div></nav>
+<main class="wrap">
+<header class="hero"><div class="dmc">CFD / FIELD NOTES <span>FOUNDATIONS · 01</span></div>
+<div class="chapter-heading"><div><div class="chapter-kicker">CHAPTER 01 / AN ENGINEER’S VIEW</div><h1>Learning to see a fluid</h1><p class="subtitle">Fields, pressure, viscosity &amp; heat</p></div><span aria-hidden="true" class="chapter-number">01</span></div>
+<p class="lead">You do not need to picture every molecule. You need to picture what the fluid carries, what pushes it, and what spreads through it.</p>
+<div class="meta"><span>Read one section at a time</span><span>Interactive · works offline</span><span>2026-10-28</span></div>
+<div class="learning-route"><span>01 <b>Predict</b></span><span>02 <b>Experiment</b></span><span>03 <b>Explain</b></span><span>04 <b>Apply</b></span></div>
+<div class="opening-note"><b>Your goal for this chapter</b><p>Describe a flow in terms of fields and properties, and explain what each property actually does.</p></div></header>
+<!-- ============ 01 CONTINUUM ============ -->
+<section id="s1"><div class="section-heading"><span class="section-index">01</span><div><div class="dmc">FLUID BEHAVIOR</div><h2>A fluid is a smooth field</h2></div></div><p class="section-lead">Zoom in far enough and water is molecules. At engineering scales, we usually work with smooth averages.</p><details class="predict"><summary><span class="tiny">PREDICT FIRST</span>If I halve my mesh size, does water become less of a continuum?</summary><div class="ans"><b class="answer-label">The reasoning</b><p>No. Continuum validity compares molecular scales with physical flow scales. Mesh size controls how well your calculation resolves those fields.</p></div></details><figure class="plate">
+<div class="controls">
+<div class="range"><label for="cs">Averaging size</label><input id="cs" max="100" min="0" step="1" type="range" value="55"/><output for="cs"></output></div>
+</div>
+<div class="figwrap" id="contwrap"><canvas aria-label="Molecules in a box, a sampling circle, and a plot of measured density against circle size" id="cont"></canvas></div>
+<div class="readout" id="contread"></div>
+<p aria-live="polite" class="sr" id="contsay"></p>
+<figcaption>Fig. 1 · Schematic sampling experiment. Tiny samples fluctuate; very large samples blur spatial variation. Look for the stable middle.</figcaption>
+<details class="model-notes"><summary>Model, assumptions &amp; source</summary><div class="detail-body"><p><span class="schem">Schematic</span>Fig. 1. The box: a toy fluid of 4000 molecules. More molecules sit at the centre than at the edges. The plot: the density measured inside the circle, divided by the true value at the centre, for every circle size. Small circles give noise. Mid-size circles give a flat line: this is the continuum value. Large circles start to average over the real change in density. The molecule count is not to scale.</p></div></details></figure><figure class="plate">
+<div class="scales-wrap" id="scales"></div>
+<figcaption>Fig. 2 · Molecular and engineering lengths on a logarithmic scale. Each interval represents a factor of ten.</figcaption>
+<details class="model-notes"><summary>Model, assumptions &amp; source</summary><div class="detail-body"><p>Fig. 2. Lengths on one logarithmic scale (each tick is ten times the last). Molecular spacing and mean free path are for air at atmospheric conditions (Pope 2000, p. 10). Versteeg and Malalasekera (1995, p. 11) treat lengths of "say 1 µm and larger" as continuum scales; this is a rough guide, not a sharp limit. The smallest flow length is "seldom less than 0.1 mm" (Pope, p. 10). The bundle hydraulic diameter is from your thesis geometry (proposal §5.1). The gap between molecular and flow lengths is three or more powers of ten.</p></div></details></figure><div class="idea-grid"><div class="idea"><b>Too small</b><p>A sample catches too few molecules. Its measured density jumps around.</p></div><div class="idea"><b>Useful middle</b><p>Many molecules fit inside, but the sample still describes one local region.</p></div><div class="idea"><b>Too large</b><p>The sample blends different parts of the flow. Real variation disappears.</p></div></div><aside class="engineering"><span class="tiny">ENGINEER’S HABIT</span><p>First choose a physical model. Then choose a mesh fine enough to resolve that model.</p></aside><details class="deeper math-detail"><summary>The equation, in plain language <span>Optional depth</span></summary><div class="eq">
+<div class="math">\[ \mathrm{Kn} = \frac{\lambda}{\ell} \]</div>
+<dl class="symbols"><dt>\(\lambda\)</dt><dd>mean free path: the mean distance a molecule moves between two collisions (m)</dd><dt>\(\ell\)</dt><dd>the smallest length in the flow, for example a gap or a thin layer (m)</dd></dl>
+<p class="aloud"><b>Read it aloud</b>The Knudsen number is the molecular step length divided by the smallest flow length. When it is much less than one, the fluid is a continuum.</p>
+<p class="src">Pope (2000) Eq. 2.1, p. 11</p>
+</div></details><details class="deeper"><summary>Technical notes &amp; course context <span>Go further</span></summary><div class="detail-body"><p>A drop of water holds a very large number of molecules. Each molecule moves in a random direction. CFD does not follow them. It uses averages: the mass in a small volume divided by that volume gives the <b>density</b>. The mean velocity of the molecules in that volume gives the <b>velocity</b>.</p><p>The averaging volume must have a correct size. If it is too small, it holds only a few molecules, and the average jumps about. If it is too large, it mixes regions where the flow is really different. Between these two limits, the average does not change with the size. That middle range is why the continuum idea works.</p><p>The ratio that tells you if the continuum idea holds is the <b>Knudsen number</b>. It compares the distance a molecule moves between two collisions with the smallest size in the flow.</p><div class="callout thesis"><b class="h">Why this matters for your thesis</b>
+<p>In your water flow the smallest flow lengths are far larger than the molecular lengths, so Kn ≪ 1 and the continuum holds. The fluid then has a smooth velocity, pressure and temperature field, and the equations in module A2 apply. Each OpenFOAM cell holds one value of each: an average of that smooth field over the cell. A cell size is a numerical choice; it does not decide whether the continuum holds.</p></div></div></details></section>
+<!-- ============ 02 FIELDS ============ -->
+<section id="s2"><div class="section-heading"><span class="section-index">02</span><div><div class="dmc">FLUID BEHAVIOR</div><h2>Stand still. Then ride along.</h2></div></div><p class="section-lead">A field is a map: velocity, pressure, or temperature at every location. A particle is a small piece of fluid moving through that map.</p><details class="predict"><summary><span class="tiny">PREDICT FIRST</span>Water enters a narrowing passage steadily. Can a particle accelerate?</summary><div class="ans"><b class="answer-label">The reasoning</b><p>Yes. It travels into regions with larger velocity. Steady means no change at a fixed location; it does not mean no acceleration.</p></div></details><figure class="plate">
+<p class="hint">Tap or click the left edge of the picture to release a particle at that height. On a keyboard: focus the picture, then use ↑ and ↓.</p>
+<div aria-label="Flow past a cylinder. Arrow keys move the release height of the particle." class="figwrap" id="eulwrap" role="group" tabindex="0"><canvas id="eul"></canvas></div>
+<div class="readout" id="eulread"></div>
+<figcaption>Fig. 3 · Schematic ideal flow around a cylinder. The map stays steady while the particle changes speed. This is not a viscous cylinder-flow prediction.</figcaption>
+<details class="model-notes"><summary>Model, assumptions &amp; source</summary><div class="detail-body"><p><span class="schem">Schematic</span>Fig. 3. Ideal (frictionless) flow past a cylinder. The cell colours show the speed at fixed points (Eulerian). The white dot is one particle with its path (Lagrangian). The small plot shows two speeds against time: the particle's speed (it changes) and the speed at the fixed probe ◆ (it stays constant). Speeds are divided by the far-away flow speed.</p></div></details></figure><div class="idea-grid"><div class="idea"><b>Fixed probe · Eulerian</b><p>Ask: what passes this location as time goes by?</p></div><div class="idea"><b>Moving particle · Lagrangian</b><p>Ask: what happens to this piece of fluid along its journey?</p></div><div class="idea"><b>Steady flow</b><p>The map stays the same. A moving particle can still speed up, slow down, or turn.</p></div></div><aside class="engineering"><span class="tiny">ENGINEER’S HABIT</span><p>When you inspect a steady CFD result, mentally follow a particle through the velocity field.</p></aside><details class="deeper"><summary>Technical notes &amp; course context <span>Go further</span></summary><div class="detail-body"><p>A <b>fluid particle</b> is the smallest piece of fluid that still has a continuum value. It moves with the local flow. There are two ways to describe a flow:</p><ul>
+<li><b>Eulerian</b>: stand at fixed points and record what passes. Each point has a value at each time. This is a <b>field</b>.</li>
+<li><b>Lagrangian</b>: follow one particle and record what happens to it.</li>
+</ul><p>The two views give different stories in the same flow. In the figure the flow is steady, so the colour of each cell never changes. But the particle slows down in front of the cylinder and speeds up over its top.</p><div class="callout of"><b class="h">In OpenFOAM</b>
+<p>The file <code>0/U</code> holds one velocity per cell: an Eulerian field. A streamline or particle track in ParaView is Lagrangian: ParaView rides the field. The equations CFD solves are written for fixed cells, but they come from laws about particles. Module A2 links the two.</p></div></div></details></section>
+<!-- ============ 03 DENSITY & PRESSURE ============ -->
+<section id="s3"><div class="section-heading"><span class="section-index">03</span><div><div class="dmc">FLUID BEHAVIOR</div><h2>Density stores mass. Pressure pushes.</h2></div></div><p class="section-lead">Density tells you how much mass fits into a volume. Pressure tells you the normal force per area on a surface.</p><details class="predict"><summary><span class="tiny">PREDICT FIRST</span>If water is modeled as incompressible, must its pressure be constant?</summary><div class="ans"><b class="answer-label">The reasoning</b><p>No. Density can be constant while pressure varies. That pressure field helps direct the flow and enforce mass conservation.</p></div></details><figure class="plate">
+<div class="controls">
+<div class="range"><label for="pp">Push on the piston</label><input id="pp" max="100" min="0" step="1" type="range" value="0"/><output for="pp"></output></div>
+</div>
+<div class="figwrap"><canvas aria-label="A gas and a liquid in two cylinders under the same push" id="pist"></canvas></div>
+<figcaption>Fig. 4 · Schematic comparison. A gas compresses visibly; an incompressible liquid model keeps its volume while pressure rises.</figcaption>
+<details class="model-notes"><summary>Model, assumptions &amp; source</summary><div class="detail-body"><p><span class="schem">Schematic</span>Fig. 4. The same push on a gas and on a liquid. The gas volume gets smaller and its density goes up. The liquid volume does not change visibly, but its pressure still goes up. Gas shown with pressure × volume constant (constant temperature). Values are relative, not real.</p></div></details></figure><div class="idea-grid"><div class="idea"><b>Density · ρ · kg/m³</b><p>More mass in the same volume means greater density.</p></div><div class="idea"><b>Pressure · p · Pa</b><p>Pressure acts on every face. A pressure difference creates a net push.</p></div><div class="idea"><b>Incompressible model</b><p>A fluid parcel keeps its density. Pressure can still change greatly.</p></div></div><aside class="engineering"><span class="tiny">ENGINEER’S HABIT</span><p>A pressure contour is useful when you ask what its differences do to the fluid.</p></aside><details class="deeper"><summary>Technical notes &amp; course context <span>Go further</span></summary><div class="detail-body"><p><b>Density</b> \(\rho\) is mass per unit volume, in kg/m³. Your thesis water at 24.0 °C has \(\rho = 997.3\) kg/m³ (proposal §5.4).</p><p>A gas gets denser when you push on it. A liquid almost does not. Versteeg and Malalasekera treat liquids, and gases at low speed, as <b>incompressible</b>: density does not change (1995, pp. 13, 21). Your thesis flow is incompressible.</p><p><b>Pressure</b> \(p\) is the normal force per unit area that the fluid puts on a surface, in Pa (N/m²). In a gas, pressure links to density and temperature through an equation of state. In an incompressible flow there is no such link (Pope 2000, p. 18). Pressure then has a different job: it takes the value that keeps mass in balance everywhere. Module A2 shows this job.</p><div class="callout of"><b class="h">In OpenFOAM</b>
+<p>The <code>incompressibleFluid</code> solver stores <b>kinematic pressure</b>: pressure divided by density, \(p/\rho\), in m²/s². The OpenFOAM-14 tutorial <code>pitzDaily</code> declares <code>0/p</code> with <code>dimensions [kinematicPressure]</code>. So 1 bar (10⁵ Pa) in your water is 10⁵ / 997.3 ≈ 100.3 m²/s² in the file.</p></div></div></details></section>
+<!-- ============ 04 VISCOSITY ============ -->
+<section id="s4"><div class="section-heading"><span class="section-index">04</span><div><div class="dmc">FLUID BEHAVIOR</div><h2>Viscosity couples neighboring layers</h2></div></div><p class="section-lead">Move the upper plate. The fluid touching it moves with it. The stationary lower plate holds its touching fluid still.</p><details class="predict"><summary><span class="tiny">PREDICT FIRST</span>Keep the plate speed and gap fixed. If viscosity doubles, what happens to the shear stress?</summary><div class="ans"><b class="answer-label">The reasoning</b><p>It doubles for this Newtonian, fully developed plate flow. The imposed velocity gradient stays the same; the stress increases.</p></div></details><figure class="plate">
+<div class="controls">
+<div class="range"><label for="cu">Top plate speed</label><input id="cu" max="10" min="0" step="0.1" type="range" value="5"/><output for="cu"></output></div>
+<div aria-label="Water temperature" class="seg" id="cfl" role="group">
+<button aria-pressed="false" data-v="10" type="button">Water 10 °C</button>
+<button aria-pressed="true" data-v="24" type="button">Water 24 °C</button>
+<button aria-pressed="false" data-v="80" type="button">Water 80 °C</button>
+</div>
+</div>
+<div class="figwrap" id="couwrap"><canvas aria-label="Water between a fixed plate and a moving plate, with velocity arrows" id="cou"></canvas></div>
+<div class="readout" id="couread"></div>
+<figcaption>Fig. 5 · Steady plate flow: local speed changes linearly across the gap. Change plate speed, then compare the shear stress for different water temperatures.</figcaption>
+<details class="model-notes"><summary>Model, assumptions &amp; source</summary><div class="detail-body"><p>Fig. 5. Flow between a fixed bottom plate and a moving top plate, 1 mm apart. The arrows show the local speed: zero at the bottom plate and equal to the plate speed at the top (no-slip). The dots move at the local speed. The shear stress is \(\mu U/h\). Viscosity from IAPWS-IF97 at 1 atm. Dot speeds are in proportion to the local speed, but not to scale.</p></div></details></figure><div class="idea-grid"><div class="idea"><b>No-slip</b><p>At an ordinary solid wall, fluid velocity matches wall velocity.</p></div><div class="idea"><b>Velocity gradient</b><p>Layers between the walls move at different speeds. A sharper change means a steeper gradient.</p></div><div class="idea"><b>Shear stress</b><p>Viscosity transfers momentum between the layers. At fixed gradient, larger viscosity means larger shear stress.</p></div><div class="idea formula-story"><b>The relationship</b><p>Same gap + twice the plate speed → twice the velocity gradient → twice the shear stress.</p></div></div><aside class="engineering"><span class="tiny">ENGINEER’S HABIT</span><p>Wall friction depends on the near-wall velocity gradient. Average speed alone cannot tell you the wall stress.</p></aside><details class="deeper math-detail"><summary>The equation, in plain language <span>Optional depth</span></summary><div class="eq">
+<div class="math">\[ \tau = \mu\,\frac{du}{dy} \]</div>
+<dl class="symbols"><dt>\(\tau\)</dt><dd>shear stress: sliding force per unit area between layers (Pa)</dd><dt>\(\mu\)</dt><dd>dynamic viscosity (Pa·s)</dd><dt>\(du/dy\)</dt><dd>how fast the velocity changes across the layers (1/s)</dd></dl>
+<p class="aloud"><b>Read it aloud</b>The shear stress is the viscosity times the rate at which velocity changes from layer to layer. Steeper change, more friction.</p>
+<p class="src">Newton's law of viscosity: the one-direction case of Versteeg &amp; Malalasekera (1995) Eq. 2.31, p. 22 (\(v = 0\))</p>
+</div><div class="eq">
+<div class="math">\[ \nu = \frac{\mu}{\rho} \]</div><dl class="symbols"><dt>\(\nu\)</dt><dd>kinematic viscosity (m²/s)</dd><dt>\(\mu\)</dt><dd>dynamic viscosity (Pa·s)</dd><dt>\(\rho\)</dt><dd>density (kg/m³)</dd></dl>
+<p class="aloud"><b>Read it aloud</b>Kinematic viscosity, "nu", is dynamic viscosity per unit density. Its unit is m²/s. Section 05 shows why: it measures how fast momentum spreads.</p>
+<p class="src">Pope (2000) p. 17</p>
+</div></details><details class="deeper"><summary>Technical notes &amp; course context <span>Go further</span></summary><div class="detail-body"><p>Put water between two plates and move the top plate. The water touching each plate moves with that plate. This is the <b>no-slip condition</b>. Pope writes it for a wall at rest: no flow through the wall and no sliding along it, so the fluid velocity there is zero (2000, Eqs. 2.36–2.37). For a moving wall the same rule says the fluid velocity equals the wall velocity. Between the plates, the water slides in layers. Each layer drags its neighbours. The friction between layers is a <b>shear stress</b>, and the fluid property that sets it is the <b>dynamic viscosity</b> \(\mu\).</p><p>CFD equations usually use the <b>kinematic viscosity</b>: dynamic viscosity divided by density.</p><p>Warm water is less viscous. From 10 °C to 80 °C, \(\nu\) falls to less than a third. Section 06 shows the full curve.</p></div></details></section>
+<!-- ============ 05 HEAT ============ -->
+<section id="s5"><div class="section-heading"><span class="section-index">05</span><div><div class="dmc">FLUID BEHAVIOR</div><h2>Heat can travel without the fluid</h2></div></div><p class="section-lead">A moving fluid carries thermal energy with it. Even in still fluid, conduction spreads heat from hot regions toward cold ones.</p><details class="predict"><summary><span class="tiny">PREDICT FIRST</span>In the wall experiment below, Pr is greater than one. Does heat spread farther than momentum?</summary><div class="ans"><b class="answer-label">The reasoning</b><p>No. Here momentum diffuses faster. In this diffusion-only experiment, penetration distances scale with the square root of diffusivity, so their ratio is √Pr.</p></div></details><figure class="plate">
+<div class="controls">
+<div class="range"><label for="dt">Water temperature</label><input id="dt" max="95" min="5" step="1" type="range" value="24"/><output for="dt"></output></div>
+</div>
+<div class="figwrap" id="difwrap"><canvas aria-label="Velocity and temperature spreading from a wall into still water" id="dif"></canvas></div>
+<div class="readout" id="difread"></div>
+<figcaption>Fig. 6 · Exact diffusion-only wall experiment. Teal is velocity; orange is temperature. Compare how far each disturbance reaches.</figcaption>
+<details class="model-notes"><summary>Model, assumptions &amp; source</summary><div class="detail-body"><p>Fig. 6. At time zero, a wall starts to move and is made hot at the same moment. The teal line is the velocity divided by the wall speed. The orange line is the temperature rise divided by the wall's rise. Both spread into the still water by diffusion only: the flow is parallel to the wall, so convection carries nothing toward or away from it. Each curve is the exact solution \(\mathrm{erfc}\big(y/2\sqrt{\Gamma t}\big)\). Velocity, with \(\Gamma = \nu\): Navier–Stokes (Pope Eq. 2.35) with no pressure gradient, known as Stokes' first problem. Temperature, with \(\Gamma = \alpha\): the scalar equation (Pope Eq. 2.54). The markers show where each curve is at one half. The ratio of the two distances is \(\sqrt{\mathrm{Pr}}\).</p></div></details></figure><div class="idea-grid"><div class="idea"><b>Conductivity · k</b><p>Sets heat flux for a given temperature gradient.</p></div><div class="idea"><b>Specific heat · c</b><p>Sets the energy needed to warm a kilogram by one kelvin.</p></div><div class="idea"><b>Diffusivity · α</b><p>Combines conduction and thermal storage. It controls how quickly temperature differences spread.</p></div><div class="idea formula-story"><b>Prandtl number · Pr</b><p>Momentum diffusivity ÷ thermal diffusivity. Above one: momentum diffuses faster. Below one: heat diffuses faster.</p></div></div><aside class="engineering"><span class="tiny">ENGINEER’S HABIT</span><p>A mesh that captures velocity can still miss a sharper temperature variation near a heated surface.</p></aside><details class="deeper math-detail"><summary>The equation, in plain language <span>Optional depth</span></summary><div class="eq">
+<div class="math">\[ \mathbf{q} = -k\,\nabla T \]</div>
+<dl class="symbols"><dt>\(\mathbf{q}\)</dt><dd>heat flux: heat flow per unit area (W/m²)</dd><dt>\(k\)</dt><dd>thermal conductivity (W/m·K)</dd><dt>\(\nabla T\)</dt><dd>temperature gradient: how fast temperature changes with distance, and in which direction (K/m)</dd></dl>
+<p class="aloud"><b>Read it aloud</b>Heat flows from hot to cold (the minus sign), and the flow is the conductivity times the temperature gradient.</p>
+<p class="src">Versteeg &amp; Malalasekera (1995) Eq. 2.20, p. 19</p>
+</div><div class="eq">
+<div class="math">\[ \mathrm{Pr} = \frac{\nu}{\alpha} \]</div><dl class="symbols"><dt>\(\mathrm{Pr}\)</dt><dd>Prandtl number (dimensionless)</dd><dt>\(\nu\)</dt><dd>momentum diffusivity (m²/s)</dd><dt>\(\alpha\)</dt><dd>thermal diffusivity (m²/s)</dd></dl>
+<p class="aloud"><b>Read it aloud</b>The Prandtl number is how fast momentum spreads divided by how fast heat spreads. Above one, momentum wins.</p>
+<p class="src">Pope (2000) §2.6, p. 21</p>
+</div></details><details class="deeper"><summary>Technical notes &amp; course context <span>Go further</span></summary><div class="detail-body"><p>Two more properties control heat. <b>Thermal conductivity</b> \(k\) sets how much heat flows through the fluid for a given temperature change over distance. This is Fourier's law:</p><p><b>Specific heat</b> \(c\) is the energy needed to make 1 kg of fluid 1 K warmer (J/kg·K). Conductivity moves heat; specific heat stores it. Their ratio, per unit density, is the <b>thermal diffusivity</b> \(\alpha = k/(\rho c)\), in m²/s. With constant \(k\), it is the number in front of the conduction term when the temperature equation is divided by \(\rho c\) (Versteeg &amp; Malalasekera 1995, Eq. 2.25).</p><p>Now \(\nu\) and \(\alpha\) have the same unit, m²/s. Each one is a <b>diffusivity</b>: \(\nu\) spreads momentum, \(\alpha\) spreads heat. Their ratio is the <b>Prandtl number</b>:</p><div class="callout thesis"><b class="h">Why this matters for your thesis</b>
+<p>At 24 °C, the existing proposal uses Pr = 6.30 (§5.4). The diffusion-only model above has a thinner thermal penetration region than momentum penetration region. In a real turbulent rod bundle, thermal resolution also depends on turbulent transport and wall treatment. Check both velocity and temperature resolution.</p></div></div></details></section>
+<!-- ============ 06 WATER ============ -->
+<section id="s6"><div class="section-heading"><span class="section-index">06</span><div><div class="dmc">FLUID BEHAVIOR</div><h2>“Water” is not one property set</h2></div></div><p class="section-lead">Temperature can change viscosity far more than density. A constant-property calculation deliberately freezes those changes.</p><details class="predict"><summary><span class="tiny">PREDICT FIRST</span>At the same flow speed, are cold-water and warm-water CFD cases physically identical?</summary><div class="ans"><b class="answer-label">The reasoning</b><p>No. Their viscosities differ, changing the balance between inertia and viscous effects. Thermal properties also change.</p></div></details><figure class="plate">
+<div class="controls">
+<div class="range"><label for="wt">Water temperature</label><input id="wt" max="95" min="5" step="1" type="range" value="24"/><output for="wt"></output></div>
+</div>
+<div class="props" id="props"></div>
+<figcaption>Fig. 7 · Water at atmospheric pressure. Read each property’s own vertical scale. Values come from the original course’s IAPWS calculations.</figcaption>
+<details class="model-notes"><summary>Model, assumptions &amp; source</summary><div class="detail-body"><p>Fig. 7. Water at 1 atm, 5–95 °C, from IAPWS-IF97 and the IAPWS formulations for viscosity and conductivity (computed with the Python package <code>iapws</code> 1.5.5). The dashed line marks 24.0 °C, your thesis fluid. The dot follows the slider. Each chart has its own vertical scale.</p></div></details></figure><div class="idea-grid"><div class="idea"><b>Compare the curves</b><p>Each plot has its own scale. Read the values rather than comparing line heights.</p></div><div class="idea"><b>Watch viscosity</b><p>At the same speed and geometry, lower kinematic viscosity means a higher Reynolds number.</p></div><div class="idea"><b>Check the assumption</b><p>Choose properties for the actual operating condition. Revisit constant properties when temperatures vary substantially.</p></div></div><aside class="engineering"><span class="tiny">ENGINEER’S HABIT</span><p>Write down the fluid state alongside every property value: temperature, pressure, and the model used.</p></aside><details class="deeper"><summary>Technical notes &amp; course context <span>Go further</span></summary><div class="detail-body"><p>Move the slider and watch the four properties change. From 5 to 95 °C, density changes by about 4% and conductivity by about 19%. Viscosity changes by a factor of about 5, and the Prandtl number by about 6. In CFD, viscosity is the property that matters most for flow, because it sets the Reynolds number (module A3).</p><div class="callout warn"><b class="h">The reactor is different</b>
+<p>The first proposal used reactor conditions: 552 K and 15.52 MPa (<code>~/Projects/msc-research/raw/RESEARCH_STATUS.md</code>). At that state, IAPWS-IF97 gives \(\rho\) = 766.3 kg/m³, \(\nu\) = 1.265 × 10⁻⁷ m²/s and Pr = 0.82. So reactor water spreads heat <i>faster</i> than momentum, which is the opposite of your 24 °C validation water. Your current proposal uses 24 °C because Byun's measurements were made at 24 °C.</p></div></div></details></section>
+<!-- ============ 07 OPENFOAM ============ -->
+<section id="s7"><div class="section-heading"><span class="section-index">07</span><div><div class="dmc">FLUID BEHAVIOR</div><h2>Translate the physics into OpenFOAM</h2></div></div><p class="section-lead">Before copying a value into a file, ask which quantity the solver expects and which units it uses.</p><details class="predict"><summary><span class="tiny">PREDICT FIRST</span>An incompressibleFluid result has a pressure difference of 50 m²/s². Is that 50 Pa?</summary><div class="ans"><b class="answer-label">The reasoning</b><p>No. Multiply by density. With the existing course’s 24 °C water value, 50 × 997.3 = 49,865 Pa. Always check field dimensions and pressure references.</p></div></details><div class="idea-grid"><div class="idea"><b>Velocity</b><p>A vector: three components, in m/s.</p></div><div class="idea"><b>Kinematic viscosity</b><p>ν = μ/ρ, in m²/s. Do not paste dynamic viscosity into a field expecting ν.</p></div><div class="idea"><b>Kinematic pressure</b><p>In the incompressibleFluid example, p represents pressure divided by density, in m²/s².</p></div></div><aside class="engineering"><span class="tiny">ENGINEER’S HABIT</span><p>Units are a practical debugging tool. Check them before diagnosing the numerical method.</p></aside><details class="deeper"><summary>Property reference for OpenFOAM <span>Optional depth</span></summary><table class="cards">
+<thead><tr><th>Property</th><th>Where</th><th>Example</th></tr></thead>
+<tbody>
+<tr><td data-h="Property">Kinematic viscosity \(\nu\)</td><td data-h="Where"><code>constant/physicalProperties</code></td><td data-h="Example"><code>viscosityModel constant;</code> <code>nu 1e-05;</code> (pitzDaily tutorial, air-like). Your water: <code>nu 9.131e-07;</code></td></tr>
+<tr><td data-h="Property">Density \(\rho\)</td><td data-h="Where">not stored by <code>incompressibleFluid</code></td><td data-h="Example">Pressure is stored as \(p/\rho\). Multiply by \(\rho\) when you need pascals.</td></tr>
+<tr><td data-h="Property">Pressure</td><td data-h="Where"><code>0/p</code></td><td data-h="Example"><code>dimensions [kinematicPressure];</code> (m²/s²)</td></tr>
+<tr><td data-h="Property">Pr (temperature as a passive scalar)</td><td data-h="Where">the scalar's diffusivity</td><td data-h="Example">Your proposal §7.1: diffusivity \(\nu/\mathrm{Pr} + \nu_t/\mathrm{Pr}_t\), Pr = 6.30. Module B5 explains the second part.</td></tr>
+</tbody>
+</table></details><details class="deeper"><summary>Technical notes &amp; course context <span>Go further</span></summary><div class="detail-body"><p class="muted" style="font-size:14px;margin-top:10px">Tutorial files read from the local OpenFOAM-14 install: <code>/opt/openfoam14/tutorials/incompressibleFluid/pitzDaily</code> (in the <code>ubuntu-box</code> distrobox).</p></div></details></section>
+<!-- ============ 08 CHECK ============ -->
+<section id="s8">
+<div class="dmc">DM-08</div>
+<h2>Check yourself</h2>
+<div class="checks">
+<details class="check"><summary>A finer mesh gives a smoother temperature contour. Has that established that the continuum assumption is valid?</summary><div class="ans"><p>No. Mesh resolution and continuum validity are different checks. Continuum validity depends on molecular versus physical flow scales; numerical accuracy needs its own verification.</p></div></details>
+<details class="check"><summary>A steady flow turns around a bend at constant speed. Is its acceleration zero?</summary><div class="ans"><p>No. Velocity includes direction. A particle accelerates when its direction changes, even if its speed stays constant.</p></div></details>
+<details class="check"><summary>Two adjacent fluid layers move at the same velocity. Must a large viscosity create a large shear stress between them?</summary><div class="ans"><p>No. In the simple shear model, the velocity gradient is zero, so that shear stress is zero. Viscosity is a property; stress also depends on deformation.</p></div></details>
+<details class="check"><summary>Two fluids have the same conductivity and density, but one has twice the specific heat. Which has the lower thermal diffusivity?</summary><div class="ans"><p>The one with twice the specific heat. Its thermal diffusivity is half as large: the same conduction must warm a greater thermal storage capacity.</p></div></details>
+<details class="check"><summary>You use the same value of dynamic viscosity in a kinematic-viscosity field. What check catches this before a run?</summary><div class="ans"><p>The units: dynamic viscosity is in Pa·s, whereas kinematic viscosity is in m²/s. Divide dynamic viscosity by density to obtain the required value.</p></div></details>
+</div>
+<aside class="engineering"><span class="tiny">BEFORE YOU MOVE ON</span><p>Explain each answer in your own words. If you get stuck, return to the matching experiment rather than memorizing the sentence.</p></aside></section>
+<!-- ============ 09 SOURCES ============ -->
+<section id="s9"><div class="dmc">DM-09</div><h2>Sources &amp; provenance</h2><details class="deeper"><summary>Books, source pages &amp; model provenance</summary>
+
+
+<ul class="sources">
+<li>Versteeg, H.K. &amp; Malalasekera, W. (1995). <i>An Introduction to Computational Fluid Dynamics: The Finite Volume Method</i>, 1st ed. Longman. §2.1 pp. 10–11 (continuum, 1 µm); p. 13 (incompressible liquid); p. 19 Eq. 2.20 (Fourier); p. 20 Eq. 2.25 (temperature equation); p. 21 (low-speed flows incompressible); p. 22 Eq. 2.31 (Newtonian stresses).</li>
+<li>Pope, S.B. (2000). <i>Turbulent Flows</i>. Cambridge University Press. §2.1 pp. 10–11 (molecular scales, Kn); §2.2 pp. 12–13 (Eulerian, Lagrangian, fluid particle); §2.4 pp. 16–17 (ν = μ/ρ, no-slip); §2.5 p. 18 (pressure in constant-density flow); §2.6 p. 21 (Pr, diffusion equation).</li>
+<li>IAPWS-IF97 water properties, with viscosity and conductivity from the separate IAPWS transport-property formulations, computed with the Python package <code>iapws</code> 1.5.5 (Fig. 5, 6, 7; reactor callout). The 24.0 °C values match your proposal §5.4.</li>
+<li>Your thesis proposal rev 2.2: <code>~/Projects/msc-research/reports/thesis-proposal-2026-10/proposal.md</code> §5.4 (water at 24 °C), §5.1 (bundle hydraulic diameter), §7.1 (solver, temperature as a passive scalar).</li>
+<li>OpenFOAM-14 tutorial <code>incompressibleFluid/pitzDaily</code> (local install).</li>
+<li>Fig. 3 uses the textbook ideal-flow pattern around a cylinder as a schematic. It is not a viscous solution.</li>
+</ul>
+</details></section>
+<!-- ============ 10 WORDS ============ -->
+<section id="s10"><div class="dmc">DM-10</div><h2>Words to keep</h2><details class="deeper"><summary>Open the chapter glossary</summary>
+
+
+<dl class="gloss">
+<dt>continuum</dt><dd>A model of a fluid as a smooth material with a value at each point, instead of single molecules.</dd>
+<dt>fluid particle</dt><dd>The smallest piece of fluid that has a stable continuum value. It moves with the flow.</dd>
+<dt>mean free path (λ)</dt><dd>The mean distance a molecule moves between two collisions.</dd>
+<dt>Knudsen number (Kn)</dt><dd>Mean free path divided by the smallest flow length. Much less than one: continuum.</dd>
+<dt>field</dt><dd>A value at each point in space, at each time. Velocity and temperature are fields.</dd>
+<dt>Eulerian</dt><dd>Describing the flow at fixed points. CFD cells are Eulerian.</dd>
+<dt>Lagrangian</dt><dd>Describing the flow by following particles.</dd>
+<dt>density (ρ)</dt><dd>Mass per unit volume, kg/m³.</dd>
+<dt>incompressible</dt><dd>Density is constant. A good model for liquids and for gases at low speed. Your thesis also holds density constant with temperature.</dd>
+<dt>pressure (p)</dt><dd>Normal force per unit area, Pa.</dd>
+<dt>kinematic pressure</dt><dd>Pressure divided by density, m²/s². What <code>incompressibleFluid</code> stores.</dd>
+<dt>no-slip condition</dt><dd>Fluid touching a wall moves with the wall.</dd>
+<dt>shear stress (τ)</dt><dd>Sliding force per unit area between fluid layers, Pa.</dd>
+<dt>dynamic viscosity (μ)</dt><dd>The property that sets shear stress for a given velocity gradient, Pa·s.</dd>
+<dt>kinematic viscosity (ν)</dt><dd>μ/ρ, m²/s. How fast momentum spreads.</dd>
+<dt>thermal conductivity (k)</dt><dd>How well the fluid conducts heat, W/m·K.</dd>
+<dt>specific heat (c)</dt><dd>Energy to make 1 kg 1 K warmer, J/kg·K.</dd>
+<dt>thermal diffusivity (α)</dt><dd>k/(ρc), m²/s. How fast heat spreads.</dd>
+<dt>Prandtl number (Pr)</dt><dd>ν/α. How fast momentum spreads compared with heat.</dd>
+<dt>IAPWS-IF97</dt><dd>The international standard formulas for the thermodynamic properties of water and steam. Viscosity and conductivity come from companion IAPWS formulations.</dd>
+</dl>
+<p class="muted" style="font-size:14px">The text follows most ASD-STE100 rules. Where a rule and a standard term disagree, the standard term wins. The text was not checked against the official ASD-STE100 dictionary.</p>
+
+</details></section>
+<nav aria-label="Modules" class="pager">
+<a class="pv" href="../index.html"><span>← Back</span><b>Course map</b></a>
+<a class="nx" href="a02-conservation-laws.html"><span>Next →</span><b>A2 Conservation laws</b></a>
+</nav></main>
+<script src="../assets/vendor/katex/katex.min.js"></script>
+<script src="../assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../assets/course.js"></script>
+<script>
+(function () {
+  const C = Course, css = C.css;
+  /* IAPWS-IF97, 1 atm: [T °C, rho kg/m3, nu m2/s, k W/mK, cp J/kgK, Pr]; 24 °C row = proposal §5.4 */
+  const W = [[5,1000.0,1.518e-06,0.5678,4205,11.24],[10,999.7,1.306e-06,0.5788,4195,9.47],[15,999.1,1.139e-06,0.5888,4189,8.09],[20,998.2,1.003e-06,0.598,4185,7.01],[24,997.3,9.131e-07,0.6049,4182,6.30],[25,997.0,8.927e-07,0.6065,4182,6.14],[30,995.7,8.007e-07,0.6144,4180,5.42],[35,994.0,7.234e-07,0.6217,4179,4.83],[40,992.2,6.578e-07,0.6285,4179,4.34],[45,990.2,6.017e-07,0.6348,4179,3.92],[50,988.0,5.531e-07,0.6406,4180,3.57],[55,985.7,5.109e-07,0.646,4181,3.26],[60,983.2,4.74e-07,0.651,4183,2.99],[65,980.6,4.415e-07,0.6556,4185,2.76],[70,977.8,4.127e-07,0.6598,4188,2.56],[75,974.9,3.872e-07,0.6636,4192,2.38],[80,971.8,3.643e-07,0.667,4196,2.23],[85,968.6,3.439e-07,0.6701,4200,2.09],[90,965.3,3.255e-07,0.6728,4205,1.96],[95,961.9,3.089e-07,0.6752,4211,1.85]];
+  function water(T) {
+    let i = 0; while (i < W.length - 2 && W[i + 1][0] < T) i++;
+    const a = W[i], b = W[i + 1], f = C.clamp((T - a[0]) / (b[0] - a[0]), 0, 1);
+    const r = a.map((v, j) => C.lerp(v, b[j], f));
+    return { T: r[0], rho: r[1], nu: r[2], k: r[3], cp: r[4], Pr: r[5], mu: r[1] * r[2], alpha: r[2] / r[5] };
+  }
+  /* erfc, Abramowitz & Stegun 7.1.26 (|error| < 1.5e-7) */
+  function erfc(x) {
+    const t = 1 / (1 + 0.3275911 * Math.abs(x));
+    const y = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))) * Math.exp(-x * x);
+    return x >= 0 ? y : 2 - y;
+  }
+  const font = (s, w) => (w || 400) + ' ' + s + 'px "JetBrains Mono", monospace';
+  const dfont = (s) => '600 ' + s + 'px "Barlow Condensed", "Arial Narrow", sans-serif';
+
+  /* ================= Fig 1: continuum ================= */
+  (function () {
+    const cv = document.getElementById('cont'), wrap = document.getElementById('contwrap');
+    const narrow = (cv.clientWidth || 600) < 560;
+    const N = 4000, SIG = 0.4, P = [];
+    /* anchors drawn from a Gaussian hump (rejection sampling); molecules jiggle about them */
+    const rnd = C.rng(7);
+    while (P.length < N) {
+      const x = rnd(), y = rnd(), d2 = (x - .5) ** 2 + (y - .5) ** 2;
+      if (rnd() < Math.exp(-d2 / (2 * SIG * SIG))) P.push({ ax: x, ay: y, ph: rnd() * 6.283, w: 2 + rnd() * 3, a: 0.004 + rnd() * 0.004 });
+    }
+    /* true continuum density at the centre, in molecules per unit area */
+    let Z = 0; { const M = 200; for (let i = 0; i < M; i++) for (let j = 0; j < M; j++) { const x = (i + .5) / M, y = (j + .5) / M; Z += Math.exp(-((x - .5) ** 2 + (y - .5) ** 2) / (2 * SIG * SIG)); } Z /= M * M; }
+    const n0 = N / Z; // density at the centre
+    const SMIN = 0.005, SMAX = 0.45, spacing = 1 / Math.sqrt(N);
+    const sOf = (v) => SMIN * Math.pow(SMAX / SMIN, v / 100);
+    let sTarget = sOf(55), s = sTarget, phase = '';
+    const slider = C.range('cs', (v) => (sOf(v) / spacing).toFixed(1) + ' spacings', (v) => { sTarget = sOf(v); fig.kick(); });
+    const tour = C.tour(wrap.parentElement), sweep = C.sweep(2, 98, 0.35);
+    const say = document.getElementById('contsay'), read = document.getElementById('contread');
+    const R = new Float64Array(N), NS = 70, radii = []; for (let i = 0; i < NS; i++) radii.push(SMIN * Math.pow(SMAX / SMIN, i / (NS - 1)));
+    function draw(g, w, h, t, dt) {
+      const v = sweep.step(tour.active(), slider.value, dt);
+      if (v !== null) { sTarget = sOf(v); slider.set(Math.round(v)); }
+      s = C.ease(s, sTarget, dt, 0.18);
+      const ink = css('--ink'), muted = css('--muted'), rule = css('--rule'), flow = css('--flow'), heat = css('--heat'), paper = css('--paper'), ok = css('--ok');
+      g.clearRect(0, 0, w, h);
+      /* box */
+      const bs = narrow ? Math.min(w, 300) : Math.min(h - 10, w * 0.42), bx = narrow ? (w - bs) / 2 : 0, by = 4;
+      g.fillStyle = paper; g.fillRect(bx, by, bs, bs); g.strokeStyle = rule; g.strokeRect(bx + .5, by + .5, bs - 1, bs - 1);
+      g.fillStyle = flow; g.globalAlpha = 0.75;
+      for (let i = 0; i < N; i++) {
+        const p = P[i], x = p.ax + p.a * Math.sin(p.w * t + p.ph), y = p.ay + p.a * Math.cos(p.w * 1.13 * t + p.ph);
+        R[i] = Math.hypot(x - .5, y - .5);
+        g.fillRect(bx + x * bs - 0.8, by + y * bs - 0.8, 1.6, 1.6);
+      }
+      g.globalAlpha = 1;
+      g.strokeStyle = heat; g.lineWidth = 2; g.beginPath(); g.arc(bx + bs / 2, by + bs / 2, Math.max(1.5, s * bs), 0, 6.283); g.stroke(); g.lineWidth = 1;
+      /* measured density vs radius */
+      const sorted = Float64Array.from(R).sort();
+      const count = (r) => { let lo = 0, hi = N; while (lo < hi) { const m = (lo + hi) >> 1; if (sorted[m] <= r) lo = m + 1; else hi = m; } return lo; };
+      const meas = (r) => count(r) / (Math.PI * r * r) / n0;
+      /* plot */
+      const px = narrow ? 44 : bs + 64, py = narrow ? bs + 34 : 18, pw = w - px - 12, ph = narrow ? h - bs - 76 : h - 60;
+      const YMAX = 2.0, xOf = (r) => px + pw * Math.log(r / SMIN) / Math.log(SMAX / SMIN), yOf = (v) => py + ph * (1 - Math.min(v, YMAX) / YMAX);
+      g.fillStyle = paper; g.fillRect(px, py, pw, ph); g.strokeStyle = rule; g.strokeRect(px + .5, py + .5, pw, ph);
+      /* continuum band */
+      const c1 = xOf(0.06), c2 = xOf(0.17);
+      g.fillStyle = ok; g.globalAlpha = 0.12; g.fillRect(c1, py, c2 - c1, ph); g.globalAlpha = 1;
+      g.fillStyle = ok; g.font = dfont(12); g.textAlign = 'center'; g.fillText('CONTINUUM ZONE', (c1 + c2) / 2, py + 14);
+      g.setLineDash([4, 4]); g.strokeStyle = muted; g.beginPath(); g.moveTo(px, yOf(1)); g.lineTo(px + pw, yOf(1)); g.stroke(); g.setLineDash([]);
+      g.strokeStyle = ink; g.lineWidth = 1.6; g.beginPath();
+      radii.forEach((r, i) => { const X = xOf(r), Y = yOf(meas(r)); i ? g.lineTo(X, Y) : g.moveTo(X, Y); }); g.stroke(); g.lineWidth = 1;
+      const m = meas(s), X = xOf(s);
+      g.strokeStyle = heat; g.beginPath(); g.moveTo(X, py); g.lineTo(X, py + ph); g.stroke();
+      g.fillStyle = heat; g.beginPath(); g.arc(X, yOf(m), 4.5, 0, 6.283); g.fill();
+      /* axes text */
+      g.fillStyle = muted; g.font = font(11); g.textAlign = 'right';
+      [0, 1, 2].forEach((v) => g.fillText(v.toFixed(0), px - 6, yOf(v) + 4));
+      g.textAlign = 'center';
+      g.fillText('circle size (log scale) →', px + pw / 2, py + ph + 16);
+      g.save(); g.translate(px - 30, py + ph / 2); g.rotate(-Math.PI / 2); g.fillText('measured ÷ true', 0, 0); g.restore();
+      g.textAlign = 'left'; g.fillText('noise', px + 4, py + ph - 6); g.textAlign = 'right'; g.fillText('real change', px + pw - 4, py + ph - 6);
+      /* readout + phase */
+      const inside = count(s);
+      read.innerHTML = 'molecules inside <b>' + inside + '</b> · measured ÷ true <b>' + m.toFixed(2) + '</b>';
+      const ph2 = s < 0.04 ? 'Too small: single molecules show' : s <= 0.17 ? 'Continuum zone: the average is stable' : s > 0.22 ? 'Too large: the real change in density shows' : 'Between zones';
+      if (ph2 !== phase) { phase = ph2; C.say(say, ph2); }
+    }
+    const fig = C.anim(cv, { height: narrow ? 560 : 330, draw });
+  })();
+
+  /* ================= Fig 2: length scales (log ruler) ================= */
+  (function () {
+    const box = document.getElementById('scales');
+    const M = [
+      { v: 3e-9, t: 'Molecule spacing, air', c: '--muted' },
+      { v: 6e-8, t: 'Mean free path, air', c: '--muted' },
+      { v: 1e-6, t: 'Continuum scale, ~1 µm', c: '--ok' },
+      { v: 1e-4, t: 'Smallest flow length, 0.1 mm', c: '--flow' },
+      { v: 2.117e-2, t: 'Your bundle D_h, 21.17 mm', c: '--heat' },
+    ];
+    function build() {
+      box.innerHTML = '';
+      const W = box.clientWidth || 600, vert = W < 560, E0 = -10, E1 = 0;
+      const H = vert ? 430 : 160;
+      const s = C.svg('svg', { class: 'fig', viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Logarithmic ruler of lengths from 0.1 nm to 1 m' }, box);
+      const sup = (e) => '10' + String(e).replace(/./g, (ch) => ({ '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' }[ch]));
+      const ink = 'var(--ink)', muted = 'var(--muted)';
+      if (!vert) {
+        /* marker labels in two rows above the axis; tick labels and the bracket below it */
+        const x0 = 24, x1 = W - 24, y = 92, xOf = (v) => x0 + (x1 - x0) * (Math.log10(v) - E0) / (E1 - E0);
+        C.svg('line', { x1: x0, y1: y, x2: x1, y2: y, stroke: ink, 'stroke-width': 2 }, s);
+        for (let e = E0; e <= E1; e++) { const x = xOf(Math.pow(10, e)); C.svg('line', { x1: x, y1: y - 5, x2: x, y2: y + 5, stroke: ink }, s); const tx = C.svg('text', { x, y: y + 22, 'text-anchor': 'middle', fill: muted, 'font-family': 'JetBrains Mono, monospace', 'font-size': 11 }, s); tx.textContent = sup(e) + ' m'; }
+        M.forEach((m, i) => {
+          const x = xOf(m.v), ty = i % 2 === 0 ? 22 : 50;
+          C.svg('line', { x1: x, y1: ty + 6, x2: x, y2: y, stroke: 'var(' + m.c + ')', 'stroke-width': 1.5 }, s);
+          C.svg('circle', { cx: x, cy: y, r: 5, fill: 'var(' + m.c + ')' }, s);
+          const anchor = x < 110 ? 'start' : x > W - 110 ? 'end' : 'middle';
+          const tx = C.svg('text', { x, y: ty, 'text-anchor': anchor, fill: ink, 'font-family': 'Source Sans 3, sans-serif', 'font-size': 13 }, s); tx.textContent = m.t;
+        });
+        const a = xOf(6e-8), b = xOf(1e-4), yb = y + 40;
+        C.svg('path', { d: 'M' + a + ' ' + (yb - 6) + ' L' + a + ' ' + yb + ' L' + b + ' ' + yb + ' L' + b + ' ' + (yb - 6), stroke: 'var(--warn)', 'stroke-width': 1.2, fill: 'none' }, s);
+        const tx = C.svg('text', { x: (a + b) / 2, y: yb + 16, 'text-anchor': 'middle', fill: 'var(--warn)', 'font-family': 'JetBrains Mono, monospace', 'font-size': 11 }, s); tx.textContent = 'mean free path to smallest flow length: more than 3 powers of ten';
+      } else {
+        const y0 = 14, y1 = H - 14, x = 70, yOf = (v) => y1 - (y1 - y0) * (Math.log10(v) - E0) / (E1 - E0);
+        C.svg('line', { x1: x, y1: y0, x2: x, y2: y1, stroke: ink, 'stroke-width': 2 }, s);
+        for (let e = E0; e <= E1; e++) { const y = yOf(Math.pow(10, e)); C.svg('line', { x1: x - 5, y1: y, x2: x + 5, y2: y, stroke: ink }, s); const tx = C.svg('text', { x: x - 10, y: y + 4, 'text-anchor': 'end', fill: muted, 'font-family': 'JetBrains Mono, monospace', 'font-size': 11 }, s); tx.textContent = sup(e) + ' m'; }
+        M.forEach((m) => {
+          const y = yOf(m.v);
+          C.svg('circle', { cx: x, cy: y, r: 5, fill: 'var(' + m.c + ')' }, s);
+          C.svg('line', { x1: x + 6, y1: y, x2: x + 22, y2: y, stroke: 'var(' + m.c + ')', 'stroke-width': 1.5 }, s);
+          const tx = C.svg('text', { x: x + 26, y: y + 4, fill: ink, 'font-family': 'Source Sans 3, sans-serif', 'font-size': 13 }, s); tx.textContent = m.t;
+        });
+      }
+    }
+    build(); addEventListener('resize', build);
+  })();
+
+  /* ================= Fig 3: Eulerian vs Lagrangian ================= */
+  (function () {
+    const cv = document.getElementById('eul'), wrap = document.getElementById('eulwrap'), read = document.getElementById('eulread');
+    const R = 0.5, X0 = -3, X1 = 3, Y0 = -1.5, Y1 = 1.5;
+    const vel = (x, y) => { const r2 = x * x + y * y, r4 = r2 * r2; if (r2 < R * R) return [0, 0]; return [1 - R * R * (x * x - y * y) / r4, -2 * R * R * x * y / r4]; };
+    const probe = [0, 0.9], probeS = Math.hypot(...vel(...probe));
+    let y0 = 0.22, p = [X0, y0], trail = [], hist = [], tRide = 0;
+    const reset = () => { p = [X0, y0]; trail = []; hist = []; tRide = 0; };
+    function setY(v) { y0 = C.clamp(v, Y0 + 0.05, Y1 - 0.05); if (Math.abs(y0) < 0.02) y0 = 0.02; reset(); fig.kick(); }
+    function geom(w, h) { const plotH = 90, fh = h - plotH - 24; const sc = Math.min(w / (X1 - X0), fh / (Y1 - Y0)); const ox = (w - sc * (X1 - X0)) / 2; return { sc, ox, oy: 4, fh, plotH }; }
+    let G = null;
+    function toPx(x, y) { return [G.ox + (x - X0) * G.sc, G.oy + (Y1 - y) * G.sc]; }
+    wrap.addEventListener('pointerdown', (e) => { if (!G) return; const r = cv.getBoundingClientRect(); const y = Y1 - (e.clientY - r.top - G.oy) / G.sc; setY(y); });
+    wrap.addEventListener('keydown', (e) => { if (e.key === 'ArrowUp') { setY(y0 + 0.1); e.preventDefault(); } if (e.key === 'ArrowDown') { setY(y0 - 0.1); e.preventDefault(); } });
+    function draw(g, w, h, t, dt) {
+      G = geom(w, h);
+      const ink = css('--ink'), muted = css('--muted'), rule = css('--rule'), flow = css('--flow'), heat = css('--heat'), paper = css('--paper'), warn = css('--warn');
+      g.clearRect(0, 0, w, h);
+      /* Eulerian cells coloured by speed */
+      const nx = 36, ny = 18, cw = (X1 - X0) / nx, ch = (Y1 - Y0) / ny;
+      for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
+        const x = X0 + (i + .5) * cw, y = Y0 + (j + .5) * ch, s = Math.hypot(...vel(x, y));
+        const [a, b] = toPx(X0 + i * cw, Y0 + (j + 1) * ch);
+        g.fillStyle = flow; g.globalAlpha = 0.08 + 0.42 * C.clamp(s / 2, 0, 1); g.fillRect(a, b, cw * G.sc + .5, ch * G.sc + .5);
+      }
+      g.globalAlpha = 1;
+      const [cx, cy] = toPx(0, 0); g.fillStyle = muted; g.beginPath(); g.arc(cx, cy, R * G.sc, 0, 6.283); g.fill();
+      /* probe */
+      const [qx, qy] = toPx(...probe); g.fillStyle = warn; g.beginPath(); g.moveTo(qx, qy - 7); g.lineTo(qx + 7, qy); g.lineTo(qx, qy + 7); g.lineTo(qx - 7, qy); g.closePath(); g.fill();
+      /* integrate the particle (RK2), speed 0.9 domain units per second at free stream */
+      const sub = 4, hstep = dt * 0.9 / sub;
+      for (let k = 0; k < sub; k++) {
+        const v1 = vel(...p), mid = [p[0] + v1[0] * hstep / 2, p[1] + v1[1] * hstep / 2], v2 = vel(...mid);
+        p = [p[0] + v2[0] * hstep, p[1] + v2[1] * hstep]; tRide += hstep;
+      }
+      if (dt > 0) { trail.push(p.slice()); hist.push([tRide, Math.hypot(...vel(...p))]); }
+      if (p[0] > X1) reset();
+      g.strokeStyle = ink; g.globalAlpha = 0.6; g.lineWidth = 1.5; g.beginPath();
+      trail.forEach((q, i) => { const [a, b] = toPx(...q); i ? g.lineTo(a, b) : g.moveTo(a, b); }); g.stroke(); g.globalAlpha = 1; g.lineWidth = 1;
+      const [px, py] = toPx(...p); g.fillStyle = paper; g.strokeStyle = ink; g.lineWidth = 2; g.beginPath(); g.arc(px, py, 5.5, 0, 6.283); g.fill(); g.stroke(); g.lineWidth = 1;
+      const [lx, ly] = toPx(X0, y0); g.fillStyle = heat; g.beginPath(); g.moveTo(lx, ly - 5); g.lineTo(lx + 8, ly); g.lineTo(lx, ly + 5); g.fill();
+      /* speed-time plot */
+      const ox = 50, oy = G.fh + 18, pw = w - ox - 14, ph = G.plotH - 8, TM = (X1 - X0) / 0.9 * 1.15;
+      g.fillStyle = paper; g.fillRect(ox, oy, pw, ph); g.strokeStyle = rule; g.strokeRect(ox + .5, oy + .5, pw, ph);
+      const xo = (tt) => ox + pw * tt / TM, yo = (v) => oy + ph * (1 - v / 2);
+      g.strokeStyle = warn; g.setLineDash([5, 4]); g.beginPath(); g.moveTo(ox, yo(probeS)); g.lineTo(ox + pw, yo(probeS)); g.stroke(); g.setLineDash([]);
+      g.strokeStyle = ink; g.lineWidth = 1.6; g.beginPath(); hist.forEach((q, i) => { const a = xo(q[0] / 0.9), b = yo(q[1]); i ? g.lineTo(a, b) : g.moveTo(a, b); }); g.stroke(); g.lineWidth = 1;
+      g.fillStyle = muted; g.font = font(11); g.textAlign = 'right'; g.fillText('2', ox - 6, oy + 10); g.fillText('0', ox - 6, oy + ph); g.fillText('1', ox - 6, yo(1) + 4);
+      g.textAlign = 'left'; g.fillStyle = ink; g.fillText('particle', ox + 6, oy + 13); g.fillStyle = warn; g.fillText('◆ probe (fixed point)', ox + 72, oy + 13);
+      g.fillStyle = muted; g.textAlign = 'center'; g.fillText('time →', ox + pw / 2, oy + ph + 14);
+      const sp = hist.length ? hist[hist.length - 1][1] : 1;
+      read.innerHTML = 'particle speed <b>' + sp.toFixed(2) + '</b> · probe speed <b>' + probeS.toFixed(2) + '</b> (both ÷ far-away speed)';
+    }
+    const fig = C.anim(cv, { height: Math.round(Math.min(360, (cv.clientWidth || 600) * 0.5 + 126)), draw });
+  })();
+
+  /* ================= Fig 4: piston, gas vs liquid ================= */
+  (function () {
+    const cv = document.getElementById('pist');
+    const narrow = (cv.clientWidth || 600) < 560;
+    let push = 0, pushT = 0;
+    C.range('pp', (v) => v + '%', (v) => { pushT = v / 100; fig.kick(); });
+    const rnd = C.rng(3);
+    const mk = (n) => Array.from({ length: n }, () => ({ x: rnd(), y: rnd(), vx: rnd() - .5, vy: rnd() - .5 }));
+    const gas = mk(60), liq = mk(240);
+    function cyl(g, x, y, w, h, frac, parts, label, pRel, rhoRel, ink, muted, rule, col, paper) {
+      g.font = dfont(14); g.fillStyle = ink; g.textAlign = 'left'; g.fillText(label, x, y - 8);
+      g.strokeStyle = ink; g.lineWidth = 2; g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + h); g.lineTo(x + w, y + h); g.lineTo(x + w, y); g.stroke(); g.lineWidth = 1;
+      const len = w * frac, x0 = x + w - len;
+      g.fillStyle = paper; g.fillRect(x0, y + 1, len - 1, h - 2);
+      g.fillStyle = muted; g.fillRect(x0 - 12, y + 2, 12, h - 4); g.fillRect(x0 - 50, y + h / 2 - 3, 38, 6);
+      g.fillStyle = col;
+      parts.forEach((q) => g.fillRect(x0 + q.x * (len - 6) + 1, y + 3 + q.y * (h - 8), 3, 3));
+      g.font = font(12); g.fillStyle = muted;
+      g.fillText('pressure ×' + pRel.toFixed(2) + '   density ×' + rhoRel.toFixed(rhoRel === 1 ? 3 : 2), x, y + h + 18);
+    }
+    function step(parts, dt) { parts.forEach((q) => { q.x += q.vx * dt * 0.8; q.y += q.vy * dt * 0.8; if (q.x < 0 || q.x > 1) { q.vx *= -1; q.x = C.clamp(q.x, 0, 1); } if (q.y < 0 || q.y > 1) { q.vy *= -1; q.y = C.clamp(q.y, 0, 1); } }); }
+    function draw(g, w, h, t, dt) {
+      push = C.ease(push, pushT, dt, 0.25);
+      step(gas, dt); step(liq, dt * 0.4);
+      const ink = css('--ink'), muted = css('--muted'), rule = css('--rule'), flow = css('--flow'), heat = css('--heat'), paper = css('--paper');
+      g.clearRect(0, 0, w, h);
+      const pRel = 1 + 1.5 * push; // isothermal gas: p V = const
+      const cw = narrow ? w - 70 : (w - 120) / 2, chh = 70;
+      const xs = narrow ? [60, 60] : [60, 60 + cw + 60], ys = narrow ? [24, 150] : [30, 30];
+      cyl(g, xs[0], ys[0], cw, chh, 1 / pRel, gas, 'GAS', pRel, pRel, ink, muted, rule, heat, paper);
+      cyl(g, xs[1], ys[1], cw, chh, 1, liq, 'LIQUID', pRel, 1, ink, muted, rule, flow, paper);
+    }
+    const fig = C.anim(cv, { height: narrow ? 270 : 150, draw });
+  })();
+
+  /* ================= Fig 5: Couette shear ================= */
+  (function () {
+    const cv = document.getElementById('cou'), wrap = document.getElementById('couwrap'), read = document.getElementById('couread');
+    let T = 24, Ut = 5, U = 5; const h = 1e-3;
+    const sl = C.range('cu', (v) => v.toFixed(1) + ' mm/s', (v) => { Ut = v; fig.kick(); });
+    C.seg(document.getElementById('cfl'), (v) => { T = +v; fig.kick(); });
+    const tour = C.tour(wrap.parentElement), sweep = C.sweep(0.5, 9.5, 0.5);
+    const rnd = C.rng(11);
+    const dots = Array.from({ length: 70 }, () => ({ x: rnd(), y: 0.04 + 0.92 * rnd() }));
+    let plateX = 0;
+    function draw(g, w, H, t, dt) {
+      const v = sweep.step(tour.active(), sl.value, dt);
+      if (v !== null) { Ut = v; sl.set(v.toFixed(1)); }
+      U = C.ease(U, Ut, dt, 0.25);
+      const ink = css('--ink'), muted = css('--muted'), rule = css('--rule'), flow = css('--flow'), heat = css('--heat'), paper = css('--paper');
+      g.clearRect(0, 0, w, H);
+      const x0 = 12, x1 = w - 12, top = 34, bot = H - 40, gap = bot - top;
+      /* plates */
+      g.fillStyle = muted; g.fillRect(x0, bot, x1 - x0, 10);
+      g.fillStyle = ink; g.fillRect(x0, top - 10, x1 - x0, 10);
+      plateX = (plateX + U / 10 * 0.3 * (x1 - x0) * dt) % 40; // hatch moves with the top-layer dots
+      g.strokeStyle = css('--paper'); g.lineWidth = 2;
+      for (let x = x0 - 40 + plateX; x < x1; x += 40) { if (x < x0) continue; g.beginPath(); g.moveTo(x, top - 9); g.lineTo(x + 8, top - 1); g.stroke(); }
+      g.lineWidth = 1;
+      g.fillStyle = paper; g.fillRect(x0, top, x1 - x0, gap);
+      /* tracer dots: move at local u, px per (mm/s) chosen so the top plate speed is visible */
+      dots.forEach((d) => { const u = U * d.y; d.x = (d.x + u / 10 * 0.3 * dt) % 1; /* display speed ∝ u, not to scale */ g.fillStyle = flow; g.globalAlpha = .7; g.fillRect(x0 + d.x * (x1 - x0) - 1.5, bot - d.y * gap - 1.5, 3, 3); });
+      g.globalAlpha = 1;
+      /* velocity arrows */
+      const ax = x0 + 40, maxL = Math.min(260, (x1 - x0) - 80);
+      g.strokeStyle = ink; g.beginPath(); g.moveTo(ax, top); g.lineTo(ax, bot); g.stroke();
+      for (let i = 0; i <= 8; i++) {
+        const f = i / 8, y = bot - f * gap, L = maxL * f * U / 10;
+        g.strokeStyle = heat; g.fillStyle = heat; g.lineWidth = 2; g.beginPath(); g.moveTo(ax, y); g.lineTo(ax + L, y); g.stroke();
+        if (L > 6) { g.beginPath(); g.moveTo(ax + L, y); g.lineTo(ax + L - 6, y - 4); g.lineTo(ax + L - 6, y + 4); g.fill(); }
+      }
+      g.lineWidth = 1; g.strokeStyle = heat; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(ax, bot); g.lineTo(ax + maxL * U / 10, top); g.stroke(); g.setLineDash([]);
+      g.fillStyle = muted; g.font = font(11); g.textAlign = 'left';
+      g.fillText('moving plate, U = ' + U.toFixed(1) + ' mm/s', x0, top - 16);
+      g.fillText('fixed plate: u = 0 here (no-slip)', x0, bot + 26);
+      g.textAlign = 'right'; g.fillText('h = 1 mm', x1, bot + 26);
+      const wtr = water(T), tau = wtr.mu * (U * 1e-3) / h;
+      read.innerHTML = 'μ <b>' + C.sci(wtr.mu, 3) + ' Pa·s</b> · du/dy = U/h <b>' + (U).toFixed(1) + ' 1/s</b> · τ = μU/h <b>' + C.sci(tau, 3) + ' Pa</b> · force on 1 m² of plate <b>' + C.sci(tau, 3) + ' N</b>';
+    }
+    const fig = C.anim(cv, { height: 250, draw });
+  })();
+
+  /* ================= Fig 6: diffusion race ================= */
+  (function () {
+    const cv = document.getElementById('dif'), read = document.getElementById('difread');
+    let T = 24; const TEND = 20, L = 0.01;
+    C.range('dt', (v) => v + ' °C', (v) => { T = v; fig.kick(); });
+    function draw(g, w, h, t, dt) {
+      const tt = C.reduce ? 10 : 0.3 + (t * 2) % TEND; // 2× real time, loops every 10 s
+      const ink = css('--ink'), muted = css('--muted'), rule = css('--rule'), flow = css('--flow'), heat = css('--heat'), paper = css('--paper');
+      g.clearRect(0, 0, w, h);
+      const wt = water(T), ox = 54, oy = 14, pw = w - ox - 14, ph = h - 60;
+      const xo = (y) => ox + pw * y / L, yo = (v) => oy + ph * (1 - v);
+      g.fillStyle = paper; g.fillRect(ox, oy, pw, ph); g.strokeStyle = rule; g.strokeRect(ox + .5, oy + .5, pw, ph);
+      g.fillStyle = ink; g.fillRect(ox - 8, oy, 8, ph);
+      const curve = (G, col) => { g.strokeStyle = col; g.lineWidth = 2.2; g.beginPath(); for (let i = 0; i <= 200; i++) { const y = L * i / 200, v = erfc(y / (2 * Math.sqrt(G * tt))); i ? g.lineTo(xo(y), yo(v)) : g.moveTo(xo(y), yo(v)); } g.stroke(); g.lineWidth = 1; };
+      curve(wt.nu, flow); curve(wt.alpha, heat);
+      const yh = (G) => 0.9539 * Math.sqrt(G * tt); // erfc(η)=0.5 at η=0.47694
+      [[wt.nu, flow], [wt.alpha, heat]].forEach(([G, col]) => { const x = xo(yh(G)); g.fillStyle = col; g.beginPath(); g.arc(x, yo(0.5), 5, 0, 6.283); g.fill(); g.setLineDash([3, 3]); g.strokeStyle = col; g.beginPath(); g.moveTo(x, yo(0.5)); g.lineTo(x, oy + ph); g.stroke(); g.setLineDash([]); });
+      g.fillStyle = muted; g.font = font(11); g.textAlign = 'center';
+      for (let mm = 0; mm <= 10; mm += 2) g.fillText(mm + '', xo(mm / 1000), oy + ph + 14);
+      g.fillText('distance from the wall (mm)', ox + pw / 2, oy + ph + 30);
+      g.textAlign = 'right'; g.fillText('1', ox - 12, oy + 10); g.fillText('0', ox - 12, oy + ph);
+      g.textAlign = 'left'; g.fillStyle = flow; g.fillText('velocity ÷ wall speed', ox + pw - 190, oy + ph - 40); g.fillStyle = heat; g.fillText('temperature rise ÷ wall rise', ox + pw - 190, oy + ph - 24);
+      g.fillStyle = ink; g.fillText('t = ' + tt.toFixed(1) + ' s', ox + 8, oy + ph - 8);
+      read.innerHTML = 'ν <b>' + C.sci(wt.nu, 3) + ' m²/s</b> · α <b>' + C.sci(wt.alpha, 3) + ' m²/s</b> · Pr <b>' + wt.Pr.toFixed(2) + '</b> · half-way distances: velocity <b>' + (yh(wt.nu) * 1000).toFixed(2) + ' mm</b>, temperature <b>' + (yh(wt.alpha) * 1000).toFixed(2) + ' mm</b> · ratio <b>' + Math.sqrt(wt.Pr).toFixed(2) + '</b>';
+    }
+    const fig = C.anim(cv, { height: 290, draw, t0: 5 });
+  })();
+
+  /* ================= Fig 7: water property explorer ================= */
+  (function () {
+    const box = document.getElementById('props');
+    const Q = [
+      { k: 'rho', t: 'Density', u: 'kg/m³', f: (v) => v.toFixed(1) },
+      { k: 'nu', t: 'Kinematic viscosity', u: 'm²/s', f: (v) => C.sci(v, 3) },
+      { k: 'k', t: 'Conductivity', u: 'W/m·K', f: (v) => v.toFixed(3) },
+      { k: 'Pr', t: 'Prandtl number', u: '', f: (v) => v.toFixed(2) },
+    ];
+    const cards = Q.map((q) => {
+      const d = document.createElement('div'); d.className = 'pc';
+      d.innerHTML = '<div class="pt">' + q.t + '</div><div class="pv"></div>';
+      box.appendChild(d);
+      const s = C.svg('svg', { class: 'fig', viewBox: '0 0 200 110', role: 'img', 'aria-label': q.t + ' against temperature' }, d);
+      const vals = W.map((r) => water(r[0])[q.k]), lo = Math.min(...vals), hi = Math.max(...vals), pad = (hi - lo) * 0.1;
+      const xo = (T) => 8 + 184 * (T - 5) / 90, yo = (v) => 100 - 88 * (v - lo + pad) / (hi - lo + 2 * pad);
+      C.svg('rect', { x: 8, y: 6, width: 184, height: 96, fill: 'none', stroke: 'var(--rule)' }, s);
+      C.svg('line', { x1: xo(24), y1: 6, x2: xo(24), y2: 102, stroke: 'var(--heat)', 'stroke-dasharray': '3 3' }, s);
+      C.svg('polyline', { points: W.map((r) => xo(r[0]) + ',' + yo(water(r[0])[q.k])).join(' '), fill: 'none', stroke: 'var(--flow)', 'stroke-width': 2 }, s);
+      const dot = C.svg('circle', { r: 4.5, fill: 'var(--ink)' }, s);
+      return { q, d, dot, xo, yo };
+    });
+    C.range('wt', (v) => v + ' °C', (T) => {
+      const wt = water(T);
+      cards.forEach((c) => { c.dot.setAttribute('cx', c.xo(T)); c.dot.setAttribute('cy', c.yo(wt[c.q.k])); c.d.querySelector('.pv').textContent = c.q.f(wt[c.q.k]) + (c.q.u ? ' ' + c.q.u : ''); });
+    }).fire();
+  })();
+})();
+</script>
+<div aria-hidden="true" class="reading-progress"><i></i></div><script src="../assets/field-notes.js"></script></body>
+</html>

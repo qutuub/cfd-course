@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+
+<html data-theme="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<title>The balances behind CFD · CFD Field Notes</title>
+<link href="../assets/vendor/katex/katex.min.css" rel="stylesheet"/>
+<link href="../assets/course.css" rel="stylesheet"/>
+<style>
+.btn{font:600 14px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;background:transparent;color:var(--ink);border:1px solid var(--rule);border-radius:3px;padding:9px 12px;cursor:pointer}
+.btn:focus-visible{outline:2px solid var(--flow);outline-offset:2px}
+.law{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}
+@media (max-width:640px){.law{grid-template-columns:1fr}}
+.law div{border:1px solid var(--rule);border-top:4px solid var(--flow);border-radius:4px;padding:10px 12px;background:var(--paper)}
+.law b{display:block;font:600 18px/1.1 var(--display);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px}
+.law span{font-size:15px;color:var(--muted)}
+@keyframes dash{to{stroke-dashoffset:-20}}
+.fluxarrow{stroke-dasharray:6 4;animation:dash 1s linear infinite}
+</style>
+<link href="../assets/field-notes.css" rel="stylesheet"/></head>
+<body class="chapter">
+<div class="topbar"><a href="../index.html">← Field Notes</a><button class="themebtn" type="button">Theme: auto</button></div>
+<nav aria-label="Sections" class="tabs"><div class="in" id="tabs">
+<a href="#s1"><span class="n">01</span>Mass</a>
+<a href="#s2"><span class="n">02</span>Box or particle</a>
+<a href="#s3"><span class="n">03</span>Momentum</a>
+<a href="#s4"><span class="n">04</span>Energy</a>
+<a href="#s5"><span class="n">05</span>One shape</a>
+<a href="#s6"><span class="n">06</span>Unknowns</a>
+<a href="#s7"><span class="n">07</span>OpenFOAM</a>
+<a href="#s8"><span class="n">08</span>Check</a>
+<a href="#s9"><span class="n">09</span>Sources</a>
+<a href="#s10"><span class="n">10</span>Words</a>
+</div></nav>
+<main class="wrap">
+<header class="hero"><div class="dmc">CFD / FIELD NOTES <span>FOUNDATIONS · 02</span></div>
+<div class="chapter-heading"><div><div class="chapter-kicker">CHAPTER 02 / AN ENGINEER’S VIEW</div><h1>The balances behind CFD</h1><p class="subtitle">Mass, momentum &amp; energy</p></div><span aria-hidden="true" class="chapter-number">02</span></div>
+<p class="lead">A CFD solver keeps the accounts for many small boxes. The same three physical rules connect every box to its neighbors.</p>
+<div class="meta"><span>Read one section at a time</span><span>Interactive · works offline</span><span>2026-10-28</span></div>
+<div class="learning-route"><span>01 <b>Predict</b></span><span>02 <b>Experiment</b></span><span>03 <b>Explain</b></span><span>04 <b>Apply</b></span></div>
+<div class="opening-note"><b>Your goal for this chapter</b><p>Explain which terms carry, spread, store, and drive a quantity before looking at the solver settings.</p></div></header>
+
+<!-- ============ 01 MASS ============ -->
+<section id="s1"><div class="section-heading"><span class="section-index">01</span><div><div class="dmc">CONSERVATION &amp; COMPUTATION</div><h2>Every cell must keep its accounts</h2></div></div><p class="section-lead">Imagine drawing a fixed box in the flow. Fluid crosses its faces. Mass inside changes only when inflow and outflow differ.</p><details class="predict"><summary><span class="tiny">PREDICT FIRST</span>Water enters a rigid, fully filled junction at 2 L/s. One branch takes 0.7 L/s. What must the other take?</summary><div class="ans"><b class="answer-label">The reasoning</b><p>1.3 L/s, assuming constant density and no other openings. This is a balance over all faces, not a rule that every face has the same velocity.</p></div></details><figure class="plate">
+<div class="controls">
+<div class="range"><label for="min">Mass in</label><input id="min" max="40" min="0" step="1" type="range" value="20"/><output for="min"></output></div>
+<div class="range"><label for="mout">Mass out</label><input id="mout" max="40" min="0" step="1" type="range" value="12"/><output for="mout"></output></div>
+<div aria-label="Fluid" class="seg" id="mfl" role="group">
+<button aria-pressed="true" data-v="gas" type="button">Gas</button>
+<button aria-pressed="false" data-v="liq" type="button">Liquid</button>
+</div>
+</div>
+<div class="figwrap" id="boxwrap"><canvas aria-label="A box of fluid with an inlet on the west face and an outlet on the east face" id="box"></canvas></div>
+<div class="readout" id="boxread"></div>
+<p aria-live="polite" class="sr" id="boxsay"></p>
+<figcaption>Fig. 1 · Control-volume mass balance. Try unequal flows in gas mode, then switch to the constant-density liquid model.</figcaption>
+<details class="model-notes"><summary>Model, assumptions &amp; source</summary><div class="detail-body"><p><span class="schem">Schematic</span>Fig. 1. A fixed box of fluid (the faces are named W and E as in Versteeg &amp; Malalasekera, Fig. 2.1). Each dot is a unit of mass. Gas: when more mass enters than leaves, the box holds more and the gas gets denser. Liquid: the density cannot change, so the mass out is locked to the mass in. That lock is the whole incompressible mass equation.</p></div></details></figure><div class="idea-grid"><div class="idea"><b>More in than out</b><p>Mass accumulates. In a fixed-volume gas, density can rise.</p></div><div class="idea"><b>Equal in and out</b><p>The mass inside stays constant. Flow can still pass through rapidly.</p></div><div class="idea"><b>Constant-density liquid</b><p>A rigid, fully filled box cannot accumulate mass. The total inflow must equal the total outflow.</p></div></div><aside class="engineering"><span class="tiny">ENGINEER’S HABIT</span><p>Check flow balance before interpreting colorful contours. A plausible picture does not establish conservation.</p></aside><details class="deeper math-detail"><summary>The equation, in plain language <span>Optional depth</span></summary><div class="eq" id="eqm">
+<div class="math">\[ \htmlClass{tm-time}{\frac{\partial \rho}{\partial t}} + \htmlClass{tm-conv}{\nabla\!\cdot\!(\rho\,\mathbf{u})} = 0 \]</div>
+<dl class="symbols"><dt>\(\partial\rho/\partial t\)</dt><dd>rate of change of density in the fixed box</dd><dt>\(\nabla\!\cdot\!(\rho\mathbf{u})\)</dt><dd>net mass flow out of the box per unit volume. "\(\nabla\cdot\)" (divergence, "div") means "out minus in, per unit volume"</dd><dt>\(\mathbf{u}\)</dt><dd>velocity vector, with parts \(u, v, w\) in \(x, y, z\)</dd></dl>
+<p class="aloud"><b>Read it aloud</b>The rate at which mass builds up in the box, plus the net rate at which mass flows out of it, is zero.</p>
+<p class="src">Versteeg &amp; Malalasekera (1995) Eq. 2.4, p. 12; Pope (2000) Eq. 2.17</p>
+</div><div class="eq" id="eqd">
+<div class="math">\[ \htmlClass{tm-conv}{\nabla\!\cdot\!\mathbf{u}} = \htmlClass{tm-conv}{\frac{\partial u}{\partial x} + \frac{\partial v}{\partial y} + \frac{\partial w}{\partial z}} = 0 \]</div><dl class="symbols"><dt>\(\mathbf{u}\)</dt><dd>velocity vector (m/s)</dd><dt>\(\nabla\cdot\mathbf{u}\)</dt><dd>net volume outflow per unit volume (1/s)</dd></dl>
+<p class="aloud"><b>Read it aloud</b>In a liquid, the volume that flows out of any box equals the volume that flows in. Speed up in one direction and you must slow down in another.</p>
+<p class="src">Versteeg &amp; Malalasekera (1995) Eqs. 2.5–2.6, p. 13</p>
+</div></details><details class="deeper"><summary>Technical notes &amp; course context <span>Go further</span></summary><div class="detail-body"><p>Take a small box of fluid that does not move. The flow carries mass in through some faces and out through others. The mass in the box goes up by the difference. That is all of mass conservation.</p><p>For a liquid the density is constant, so the first term is zero and \(\rho\) cancels:</p><div class="callout"><b class="h">Keep this in mind</b><p>This equation has no pressure in it, and it does not say how the fluid moves. It is only a rule the velocity must obey. Section 06 shows that pressure is the quantity that makes the velocity obey it.</p></div></div></details></section>
+<!-- ============ 02 BOX OR PARTICLE ============ -->
+<section id="s2"><div class="section-heading"><span class="section-index">02</span><div><div class="dmc">CONSERVATION &amp; COMPUTATION</div><h2>Change can come from moving</h2></div></div><p class="section-lead">A temperature probe can warm because warm fluid arrives. That does not mean each arriving fluid particle is warming.</p><details class="predict"><summary><span class="tiny">PREDICT FIRST</span>A warm patch moves past a probe without diffusion. The probe warms and cools. Does the patch lose its temperature?</summary><div class="ans"><b class="answer-label">The reasoning</b><p>No. Each particle keeps its temperature in this ideal transport-only model. The fixed probe samples different particles.</p></div></details><figure class="plate">
+<div class="controls">
+<div aria-label="Diffusion" class="seg" id="bdif" role="group">
+<button aria-pressed="true" data-v="off" type="button">No diffusion</button>
+<button aria-pressed="false" data-v="on" type="button">With diffusion</button>
+</div>
+</div>
+<div class="figwrap"><canvas aria-label="A warm patch carried past a fixed probe, with a particle riding inside the patch" id="blob"></canvas></div>
+<div class="readout" id="blobread"></div>
+<figcaption>Fig. 2 · A moving warm patch: exact one-dimensional convection–diffusion model. Compare a fixed probe with a moving particle.</figcaption>
+<details class="model-notes"><summary>Model, assumptions &amp; source</summary><div class="detail-body"><p><span class="schem">Schematic</span>Fig. 2. A warm patch (orange band) is carried to the right by a steady flow. The probe ◆ is fixed; the white dot rides with the flow at the centre of the patch. Without diffusion the probe sees the temperature rise and fall, but the particle sees no change: \(DT/Dt = 0\). With diffusion the patch spreads, and the particle cools too. Exact solution of the 1-D convection–diffusion equation for a Gaussian patch.</p></div></details></figure><div class="idea-grid"><div class="idea"><b>Local change</b><p>What a fixed probe records over time.</p></div><div class="idea"><b>Convective change</b><p>What a particle encounters because it moves through a spatial gradient.</p></div><div class="idea"><b>Material change</b><p>The combination: what that moving particle actually experiences.</p></div></div><aside class="engineering"><span class="tiny">ENGINEER’S HABIT</span><p>Steady flow can accelerate fluid. Unsteady measurements can come from transport, even when each particle keeps its property.</p></aside><details class="deeper math-detail"><summary>The equation, in plain language <span>Optional depth</span></summary><div class="eq" id="eqmd">
+<div class="math">\[ \frac{D\phi}{Dt} = \htmlClass{tm-time}{\frac{\partial \phi}{\partial t}} + \htmlClass{tm-conv}{\mathbf{u}\cdot\nabla\phi} \]</div>
+<dl class="symbols"><dt>\(D\phi/Dt\)</dt><dd>rate of change of any quantity \(\phi\) seen by a moving particle (material derivative)</dd><dt>\(\partial\phi/\partial t\)</dt><dd>rate of change at a fixed point</dd><dt>\(\mathbf{u}\cdot\nabla\phi\)</dt><dd>the change met by moving: speed times how fast \(\phi\) changes along the path</dd></dl>
+<p class="aloud"><b>Read it aloud</b>What the particle feels equals what a fixed probe sees, plus what the particle meets because it travels.</p>
+<p class="src">Versteeg &amp; Malalasekera (1995) Eq. 2.7, p. 13; Pope (2000) Eq. 2.12, p. 13</p>
+</div></details><details class="deeper"><summary>Technical notes &amp; course context <span>Go further</span></summary><div class="detail-body"><p>Newton's law and the energy law are about a <i>particle</i>: a piece of fluid that moves. CFD needs them for a <i>fixed box</i> (A1, section 02). The link is the <b>material derivative</b>: the rate of change seen by a particle is the rate of change at a fixed point plus the change the particle meets because it moves.</p><p>Versteeg and Malalasekera then multiply by density and use mass conservation to write the same thing as "rate of increase in the box + net flow out of the box" (their Eq. 2.10, p. 14). That second form is the <b>conservative form</b>. CFD uses it, because it is a balance for a fixed box.</p></div></details></section>
+<!-- ============ 03 MOMENTUM ============ -->
+<section id="s3"><div class="section-heading"><span class="section-index">03</span><div><div class="dmc">CONSERVATION &amp; COMPUTATION</div><h2>Navier–Stokes is a force balance</h2></div></div><p class="section-lead">The momentum equation is Newton’s second law applied to fluid. Forces change its speed or direction.</p><details class="predict"><summary><span class="tiny">PREDICT FIRST</span>In a long, straight, fully developed channel, why can pressure keep dropping while speed no longer rises downstream?</summary><div class="ans"><b class="answer-label">The reasoning</b><p>The net pressure push balances wall friction. There is no streamwise acceleration in this ideal fully developed flow. Steady does not mean zero force; it means a balance.</p></div></details><figure class="plate">
+<div class="controls">
+<div aria-label="Pressure push" class="seg" id="lp" role="group"><button aria-pressed="true" data-v="on" type="button">Pressure push on</button><button aria-pressed="false" data-v="off" type="button">Off</button></div>
+<div aria-label="Viscosity" class="seg" id="lv" role="group"><button aria-pressed="true" data-v="on" type="button">Viscosity on</button><button aria-pressed="false" data-v="off" type="button">Off</button></div>
+<button class="btn" id="lrst" type="button">Restart from rest</button>
+</div>
+<div class="figwrap" id="labwrap"><canvas aria-label="Velocity profile between two plates developing in time, with a force balance" id="lab"></canvas></div>
+<div class="readout" id="labread"></div>
+<p aria-live="polite" class="sr" id="labsay"></p>
+<figcaption>Fig. 3 · Start-up flow between plates, calculated with finite differences. Pressure accelerates the fluid; viscosity transfers momentum to the walls.</figcaption>
+<details class="model-notes"><summary>Model, assumptions &amp; source</summary><div class="detail-body"><p>Fig. 3. Left: the velocity across the 2 mm gap (water at 24 °C, \(\nu\) = 9.131 × 10⁻⁷ m²/s). The dashed curve is the steady answer, a parabola. Right: the forces on the water per square metre of plate. The <span class="tm-press">pressure push</span> is \(\rho G h\), where \(G\) is the pressure drop per metre divided by density (0.01826 m/s²) and \(h\) is the 2 mm gap; the <span class="tm-diff">wall friction</span> is \(2\tau_w\); the difference is the <span class="tm-time">rate of change</span> of momentum. <span class="tm-conv">Convection</span> is zero here, because the velocity does not change along the channel. Pressure drop 18.2 Pa per metre, chosen for a steady centre speed of 1 cm/s. Computed in your browser (finite differences, 41 points), shown at ¼ of real time.</p></div></details></figure><div class="idea-grid"><div class="idea"><b>Pressure</b><p>A pressure gradient produces a net force. Uniform pressure does not accelerate the fluid.</p></div><div class="idea"><b>Viscous stress</b><p>Momentum transfer between neighboring regions. At walls, this produces friction.</p></div><div class="idea"><b>Body forces</b><p>Forces acting throughout the fluid volume, such as gravity. These enter as sources or an equivalent pressure treatment.</p></div></div><aside class="engineering"><span class="tiny">ENGINEER’S HABIT</span><p>Ask which terms balance in your geometry before choosing schemes or trusting a solver result.</p></aside><details class="deeper math-detail"><summary>The equation, in plain language <span>Optional depth</span></summary><div class="eq" id="eqmom">
+<div class="math">\[ \begin{aligned} &amp;\htmlClass{tm-time}{\frac{\partial(\rho u)}{\partial t}} + \htmlClass{tm-conv}{\nabla\!\cdot\!(\rho u\,\mathbf{u})} \\ &amp;\quad = \htmlClass{tm-press}{-\frac{\partial p}{\partial x}} + \htmlClass{tm-diff}{\nabla\!\cdot\!(\mu\,\nabla u)} + \htmlClass{tm-src}{S_{Mx}} \end{aligned} \]</div>
+<dl class="symbols"><dt>\(\rho u\)</dt><dd>\(x\)-momentum per unit volume</dd><dt>\(\nabla\!\cdot\!(\rho u\mathbf{u})\)</dt><dd>\(x\)-momentum carried out of the box by the flow</dd><dt>\(-\partial p/\partial x\)</dt><dd>net pressure push in \(x\): from high pressure to low</dd><dt>\(\nabla\!\cdot\!(\mu\nabla u)\)</dt><dd>viscous friction: momentum spread by viscosity. "\(\nabla\)" (gradient, "grad") gives how fast \(u\) changes in each direction</dd><dt>\(S_{Mx}\)</dt><dd>momentum source: body forces, plus remaining viscous contributions in the general form</dd></dl>
+<p class="aloud"><b>Read it aloud</b>The x-momentum in the box goes up, plus what the flow carries out, equals the pressure push plus the viscous friction plus any body force. The \(y\) and \(z\) equations have the same shape.</p>
+<p class="src">Versteeg &amp; Malalasekera (1995) Eq. 2.37a, p. 24; the source \(S_M\) is defined in Eq. 2.33, p. 23</p>
+</div><div class="eq" id="eqmomp">
+<div class="math">\[ \htmlClass{tm-time}{\frac{\partial \mathbf{u}}{\partial t}} + \htmlClass{tm-conv}{(\mathbf{u}\cdot\nabla)\,\mathbf{u}} = \htmlClass{tm-press}{-\frac{1}{\rho}\nabla p} + \htmlClass{tm-diff}{\nu\,\nabla^2\mathbf{u}} \]</div>
+<dl class="symbols"><dt>\(\nabla^2\)</dt><dd>Laplacian: positive where a value is below the mean of its neighbours, so diffusion fills dips and flattens peaks. With a constant diffusion coefficient, diffusion appears as a Laplacian</dd><dt>\(p\)</dt><dd>here a modified pressure that also contains gravity's weight, so gravity has no separate term</dd></dl>
+<p class="aloud"><b>Read it aloud</b>Acceleration of the fluid equals the pressure push per unit mass plus viscous spreading of velocity. Together with \(\nabla\cdot\mathbf{u} = 0\), these are the Navier–Stokes equations for your water.</p>
+<p class="src">Pope (2000) Eqs. 2.34–2.35, p. 17. Gravity drops out into the pressure only when density is constant (Pope §2.5, p. 18).</p>
+</div></details><div class="term-key">
+<h3>One color for each physical role</h3>
+
+<div class="chips" data-eq="eqm eqd eqmd eqmom eqmomp eqT eqgen eqint">
+<button aria-pressed="false" class="chip tm-time" data-term="time" type="button"><span>Rate of change</span></button>
+<button aria-pressed="false" class="chip tm-conv" data-term="conv" type="button"><span>Convection</span></button>
+<button aria-pressed="false" class="chip tm-press" data-term="press" type="button"><span>Pressure</span></button>
+<button aria-pressed="false" class="chip tm-diff" data-term="diff" type="button"><span>Diffusion</span></button>
+<button aria-pressed="false" class="chip tm-src" data-term="src" type="button"><span>Source</span></button>
+</div>
+<table class="cards">
+<thead><tr><th>Term</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td data-h="Term"><b class="tm-time">Rate of change</b></td><td data-h="What it does">How fast the amount in a fixed box goes up or down.</td></tr>
+<tr><td data-h="Term"><b class="tm-conv">Convection</b></td><td data-h="What it does">The flow carries the quantity in or out of the box.</td></tr>
+<tr><td data-h="Term"><b class="tm-press">Pressure</b></td><td data-h="What it does">The push from high pressure toward low pressure (momentum only).</td></tr>
+<tr><td data-h="Term"><b class="tm-diff">Diffusion</b></td><td data-h="What it does">Molecular mixing spreads the quantity from high to low values: viscosity for momentum, conduction for heat.</td></tr>
+<tr><td data-h="Term"><b class="tm-src">Source</b></td><td data-h="What it does">The quantity is made or removed inside the box: gravity, a heater, a driving force.</td></tr>
+</tbody>
+</table>
+</div><details class="deeper"><summary>Technical notes &amp; course context <span>Go further</span></summary><div class="detail-body"><p>Newton's second law for a particle: mass × acceleration = sum of forces. Versteeg and Malalasekera split the forces into two groups (1995, p. 15):</p><ul>
+<li><b>Surface forces</b> act on the faces of the box: <b class="tm-press">pressure</b> and <b class="tm-diff">viscous stress</b>.</li>
+<li><b>Body forces</b> act on all of the fluid inside: gravity, centrifugal and Coriolis forces, electromagnetic forces. CFD puts these in the <b class="tm-src">source</b>.</li>
+</ul><p>With Newton's law of viscosity (A1, section 04) for the viscous stress, the \(x\)-momentum equation in conservative form is:</p><p>For a liquid with constant properties, Pope writes all three directions in one line. Divide by \(\rho\) and use \(\nu = \mu/\rho\):</p><p>Water starts at rest between two plates 2 mm apart. A pressure drop pushes it along. Switch the terms off and on and watch which balance gives a steady flow.</p><div class="callout thesis"><b class="h">Why this matters for your thesis</b>
+<p>Your periodic precursor (proposal §7.1) has no inlet and outlet pressure. OpenFOAM's <code>meanVelocityForce</code> adds a <b class="tm-src">source</b> term instead, and adjusts it until the mean velocity is right. In this lab, that source plays the same role as the <b class="tm-press">pressure push</b>. Module F3 shows the details.</p></div></div></details></section>
+<!-- ============ 04 ENERGY ============ -->
+<section id="s4"><div class="section-heading"><span class="section-index">04</span><div><div class="dmc">CONSERVATION &amp; COMPUTATION</div><h2>Carry heat. Spread heat. Add heat.</h2></div></div><p class="section-lead">For the simple constant-property model here, temperature changes through convection, conduction, and any volumetric heating.</p><details class="predict"><summary><span class="tiny">PREDICT FIRST</span>A rod heats the water only through its surface. Must the water also have a volumetric heat source?</summary><div class="ans"><b class="answer-label">The reasoning</b><p>No. The heated wall supplies a boundary heat flux or temperature condition. Adding the same power again as a fluid source would double-count it.</p></div></details><figure class="plate">
+<div class="controls">
+<div class="range"><label for="hs">Flow speed</label><input id="hs" max="100" min="0" step="1" type="range" value="45"/><output for="hs"></output></div>
+</div>
+<div class="figwrap" id="heatwrap"><canvas aria-label="Temperature field in a channel with a heated band on the lower wall" id="heat"></canvas></div>
+<div class="readout" id="heatread"></div>
+<figcaption>Fig. 4 · Schematic coarse-grid convection–diffusion experiment. Faster flow carries heat farther downstream before it spreads away from the wall.</figcaption>
+<details class="model-notes"><summary>Model, assumptions &amp; source</summary><div class="detail-body"><p><span class="schem">Schematic</span>Fig. 4. Cold fluid enters on the left and flows over a heated band on the lower wall (orange bar). The colour is temperature. Slow flow: conduction wins, and the heat spreads far from the wall. Fast flow: convection wins, and the heat stays in a thin warm layer near the wall. Computed in your browser on a coarse 90 × 30 grid; the readout is rounded to one cell.</p></div></details></figure><div class="idea-grid"><div class="idea"><b>Convection</b><p>The moving fluid carries temperature patterns downstream.</p></div><div class="idea"><b>Diffusion</b><p>Conduction spreads heat across temperature gradients.</p></div><div class="idea"><b>Source or boundary</b><p>A heater inside the fluid is a source. A heated wall adds energy through the boundary.</p></div></div><aside class="engineering"><span class="tiny">ENGINEER’S HABIT</span><p>Always locate the energy input: inside the volume or across a boundary.</p></aside><details class="deeper math-detail"><summary>The equation, in plain language <span>Optional depth</span></summary><div class="eq" id="eqT">
+<div class="math">\[ \htmlClass{tm-time}{\frac{\partial T}{\partial t}} + \htmlClass{tm-conv}{\mathbf{u}\cdot\nabla T} = \htmlClass{tm-diff}{\alpha\,\nabla^2 T} + \htmlClass{tm-src}{\frac{S}{\rho c}} \]</div>
+<dl class="symbols"><dt>\(T\)</dt><dd>temperature (K)</dd><dt>\(\alpha\)</dt><dd>thermal diffusivity, \(k/(\rho c)\) (A1, section 05)</dd><dt>\(S\)</dt><dd>heat made inside the fluid per unit volume (W/m³); zero in your thesis water, which is heated only at the rod walls</dd></dl>
+<p class="aloud"><b>Read it aloud</b>Temperature at a point changes because the flow carries warm or cold fluid past it, because heat conducts from hot to cold, and because of any heat made inside.</p>
+<p class="src">Versteeg &amp; Malalasekera (1995) Eq. 2.25, p. 20, with constant \(k\) and the viscous terms removed; Pope (2000) Eq. 2.54, p. 21 (the same equation as a passive scalar)</p>
+</div></details><details class="deeper"><summary>Technical notes &amp; course context <span>Go further</span></summary><div class="detail-body"><p>The energy law says: the energy of a particle goes up by the heat conducted in plus the work done on it. For a liquid with constant properties, Versteeg and Malalasekera reduce it to an equation for temperature (their Eq. 2.25). That equation also has a viscous heating term. Your proposal leaves it out, because it treats temperature as a passive scalar (§7.1). Divide by \(\rho c\):</p><p>This is the same shape as the momentum equation, but without a pressure term. Convection carries heat; diffusion spreads it. The figure shows the contest between the two near a heated wall.</p></div></details></section>
+<!-- ============ 05 ONE SHAPE ============ -->
+<section id="s5"><div class="section-heading"><span class="section-index">05</span><div><div class="dmc">CONSERVATION &amp; COMPUTATION</div><h2>From one box to a whole mesh</h2></div></div><p class="section-lead">A finite-volume solver repeats the same balance over every cell. Internal faces connect the neighboring accounts.</p><details class="predict"><summary><span class="tiny">PREDICT FIRST</span>If a face sends mass from cell A into cell B, should the two cells calculate unrelated face fluxes?</summary><div class="ans"><b class="answer-label">The reasoning</b><p>No. A conservative method uses a consistent shared flux: what leaves A enters B. Internal contributions then cancel in the domain-wide balance.</p></div></details><figure class="plate">
+<div id="fvcell" style="max-width:520px;margin:0 auto"></div>
+<figcaption>Fig. 5 · Schematic cell balance. Convection and diffusion cross the faces; sources act inside; the remainder changes storage.</figcaption>
+<details class="model-notes"><summary>Model, assumptions &amp; source</summary><div class="detail-body"><p><span class="schem">Schematic</span>Fig. 5. The integral form on one 2-D box. <span class="tm-conv">Convective flux</span> enters through face W and leaves through face E. <span class="tm-diff">Diffusive flux</span> enters through face S from a hot wall. A <span class="tm-src">source</span> works inside. The <span class="tm-time">rate of change</span> is what is left over. A finite-volume code (OpenFOAM) does exactly this sum for every cell. Module D1 starts here.</p></div></details></figure><div class="idea-grid"><div class="idea"><b>Cell total</b><p>What is stored inside this volume?</p></div><div class="idea"><b>Face flux</b><p>How much crosses each face per unit time? A shared face leaves one cell and enters its neighbor.</p></div><div class="idea"><b>Source</b><p>What is added or removed within this volume?</p></div></div><aside class="engineering"><span class="tiny">ENGINEER’S HABIT</span><p>Conservation gives a powerful check. It does not by itself prove mesh accuracy or validate the physical model.</p></aside><details class="deeper math-detail"><summary>The equation, in plain language <span>Optional depth</span></summary><div class="eq" id="eqgen">
+<div class="math">\[ \begin{aligned} &amp;\htmlClass{tm-time}{\frac{\partial(\rho\phi)}{\partial t}} + \htmlClass{tm-conv}{\nabla\!\cdot\!(\rho\phi\,\mathbf{u})} \\ &amp;\quad = \htmlClass{tm-diff}{\nabla\!\cdot\!(\Gamma\,\nabla\phi)} + \htmlClass{tm-src}{S_\phi} \end{aligned} \]</div><dl class="symbols"><dt>\(\phi\)</dt><dd>transported quantity per unit mass</dd><dt>\(\Gamma\)</dt><dd>diffusion coefficient for that quantity</dd><dt>\(S_\phi\)</dt><dd>source per unit volume</dd><dt>\(\rho,\mathbf{u},t\)</dt><dd>density, velocity vector, time</dd></dl>
+<p class="aloud"><b>Read it aloud</b>The amount of \(\phi\) in the box goes up, plus what the flow carries out, equals what diffusion brings in plus what is made inside.</p>
+<p class="src">Versteeg &amp; Malalasekera (1995) Eq. 2.39, p. 25</p>
+</div><div class="eq" id="eqint">
+<div class="math">\[ \begin{aligned} &amp;\htmlClass{tm-time}{\frac{\partial}{\partial t}\int_{V}\rho\phi\,dV} + \htmlClass{tm-conv}{\oint_{A}\mathbf{n}\cdot(\rho\phi\,\mathbf{u})\,dA} \\ &amp;\quad = \htmlClass{tm-diff}{\oint_{A}\mathbf{n}\cdot(\Gamma\nabla\phi)\,dA} + \htmlClass{tm-src}{\int_{V} S_\phi\,dV} \end{aligned} \]</div>
+<dl class="symbols"><dt>\(\int_V\)</dt><dd>sum over the volume of the box</dd><dt>\(\oint_A\)</dt><dd>sum over all faces of the box</dd><dt>\(\mathbf{n}\)</dt><dd>unit vector normal to a face, pointing out</dd></dl>
+<p class="aloud"><b>Read it aloud</b>Change of the total in the box, plus the convective flux out through all faces, equals the diffusive flux in through all faces plus what is made inside. Only face fluxes and box totals remain.</p>
+<p class="src">Versteeg &amp; Malalasekera (1995) Eqs. 2.40–2.42, pp. 25–26</p>
+</div></details><details class="deeper"><summary>Equation and OpenFOAM reference <span>Optional depth</span></summary><table class="cards">
+<thead><tr><th>Equation</th><th>\(\phi\)</th><th>Diffusion coefficient \(\Gamma\)</th><th>Source \(S_\phi\)</th></tr></thead>
+<tbody>
+<tr><td data-h="Equation">Mass</td><td data-h="φ">\(1\)</td><td data-h="Γ">0 (no diffusion)</td><td data-h="Source">0</td></tr>
+<tr><td data-h="Equation">\(x\)-momentum</td><td data-h="φ">\(u\)</td><td data-h="Γ">\(\mu\)</td><td data-h="Source">\(-\partial p/\partial x + S_{Mx}\) (pressure goes in the source)</td></tr>
+<tr><td data-h="Equation">Temperature</td><td data-h="φ">\(T\)</td><td data-h="Γ">\(k/c\)</td><td data-h="Source">\(S/c\)</td></tr>
+</tbody>
+</table></details><details class="deeper"><summary>Technical notes &amp; course context <span>Go further</span></summary><div class="detail-body"><p>Look at the three equations again: they all have a rate of change, a convection term, a diffusion term and a source. Versteeg and Malalasekera write them all as one <b>general transport equation</b> for any quantity \(\phi\):</p><p class="muted" style="font-size:14px;margin-top:8px">Mass and momentum rows: Versteeg &amp; Malalasekera (1995) p. 25 and Table 2.1. Temperature row: Eq. 2.25 divided by \(c\), with constant \(c\).</p><p>The last step turns the equation into a balance for a box of finite size. Integrate over the box volume, then use Gauss's divergence theorem: a divergence summed over a volume equals the flux summed over its faces.</p></div></details></section>
+<!-- ============ 06 UNKNOWNS ============ -->
+<section id="s6"><div class="section-heading"><span class="section-index">06</span><div><div class="dmc">CONSERVATION &amp; COMPUTATION</div><h2>Pressure makes the flow fit together</h2></div></div><p class="section-lead">For constant-density flow, the unknowns are three velocity components and pressure. Continuity constrains how the velocities can fit together.</p><details class="predict"><summary><span class="tiny">PREDICT FIRST</span>Can you solve temperature after the flow and still have a physically consistent model?</summary><div class="ans"><b class="answer-label">The reasoning</b><p>Yes, if temperature does not feed back through density, viscosity, buoyancy, or other coupled physics. That is the passive-temperature assumption, not a general property of heat transfer.</p></div></details><figure class="plate">
+<div class="controls"><div aria-label="Heat transfer" class="seg" id="uht" role="group"><button aria-pressed="true" data-v="no" type="button">Flow only</button><button aria-pressed="false" data-v="yes" type="button">With heat transfer</button></div></div>
+<div id="count" style="max-width:520px;margin:0 auto"></div>
+<figcaption>Fig. 6 · Equation map for this constant-property incompressible model. Temperature is an additional unknown only when heat transfer is included.</figcaption>
+<details class="model-notes"><summary>Model, assumptions &amp; source</summary><div class="detail-body"><p>Fig. 6. Equations (left) and unknowns (right). Each momentum equation mainly decides one velocity part. Pressure has no transport equation and no equation of state: its equation (a Poisson equation) comes from combining the momentum and mass equations, and its value is whatever makes the velocity satisfy the mass equation. With constant properties, temperature does not act back on the flow. So the temperature equation can be solved after the flow, on a frozen velocity field.</p></div></details></figure><div class="idea-grid"><div class="idea"><b>Momentum</b><p>Relates velocity to pressure, stresses, and forces.</p></div><div class="idea"><b>Continuity</b><p>Requires the velocity field to conserve mass.</p></div><div class="idea"><b>Pressure coupling</b><p>A pressure equation is obtained by combining these requirements. Pressure and velocity must be solved consistently.</p></div></div><aside class="engineering"><span class="tiny">ENGINEER’S HABIT</span><p>Count unknowns and equations, then check coupling and boundary conditions. The count alone does not guarantee a well-posed problem.</p></aside><details class="deeper"><summary>Technical notes &amp; course context <span>Go further</span></summary><div class="detail-body"><p>Counting equations and unknowns is a useful first check. Appropriate initial and boundary conditions and compatible equations are also necessary.</p><p>Pope (2000, §2.5) proves the pressure part. Take the divergence of the momentum equation and require \(\nabla\cdot\mathbf{u} = 0\) to stay true. This gives a Poisson equation for pressure, driven by the velocity field. So pressure "feels" the whole flow at once. Module D3 shows how OpenFOAM's SIMPLE and PIMPLE loops use this.</p><p>Versteeg and Malalasekera make the heat part: "Without density variations there is no linkage between the energy equation and the mass conservation and momentum equations." The energy equation is needed only "if the problem involves heat transfer" (1995, p. 21).</p><div class="callout thesis"><b class="h">Why this matters for your thesis</b>
+<p>This is why your proposal can solve the flow first with <code>incompressibleFluid</code>, then solve temperature on the converged, frozen flow with <code>scalarTransport</code> (§7.1). With constant properties and no buoyancy, temperature cannot change the flow. That is a modelling assumption, not a fact about water: real viscosity does change with temperature (A1, section 06). Your proposal (§7.1) estimates the error it causes in Nu.</p></div></div></details></section>
+<!-- ============ 07 OPENFOAM ============ -->
+<section id="s7"><div class="section-heading"><span class="section-index">07</span><div><div class="dmc">CONSERVATION &amp; COMPUTATION</div><h2>Read fvSchemes as a physics map</h2></div></div><p class="section-lead">The dictionary names are easier to remember once you can recognize the operation in the equation.</p><details class="predict"><summary><span class="tiny">PREDICT FIRST</span>Is OpenFOAM’s phi always the generic transported quantity φ used in a textbook?</summary><div class="ans"><b class="answer-label">The reasoning</b><p>No. In this incompressible example, phi is volumetric face flux. The textbook φ is a placeholder for a transported quantity. The same name can mean different things.</p></div></details><div class="idea-grid"><div class="idea"><b>ddt</b><p>Time change: how storage changes.</p></div><div class="idea"><b>div</b><p>Divergence: net flux out. This is where convective terms commonly appear.</p></div><div class="idea"><b>grad / laplacian</b><p>Gradients detect spatial differences. A Laplacian commonly represents constant-coefficient diffusion.</p></div></div><aside class="engineering"><span class="tiny">ENGINEER’S HABIT</span><p>Choose a numerical scheme for an identified term. Avoid treating dictionaries as magic settings.</p></aside><details class="deeper"><summary>Equation and OpenFOAM reference <span>Optional depth</span></summary><table class="cards">
+<thead><tr><th>Term</th><th>In the equation</th><th>Entry in fvSchemes</th><th>pitzDaily setting</th></tr></thead>
+<tbody>
+<tr><td data-h="Term"><b class="tm-time">Rate of change</b></td><td data-h="In the equation">\(\partial\mathbf{u}/\partial t\)</td><td data-h="fvSchemes"><code>ddtSchemes</code></td><td data-h="pitzDaily"><code>default Euler;</code></td></tr>
+<tr><td data-h="Term"><b class="tm-conv">Convection</b></td><td data-h="In the equation">\(\nabla\cdot(\mathbf{u}\,\mathbf{u})\)</td><td data-h="fvSchemes"><code>divSchemes</code> → <code>div(phi,U)</code></td><td data-h="pitzDaily"><code>Gauss linearUpwind grad(U);</code></td></tr>
+<tr><td data-h="Term"><b class="tm-press">Pressure</b></td><td data-h="In the equation">\(\nabla p\)</td><td data-h="fvSchemes"><code>gradSchemes</code> (every gradient, \(\nabla p\) included)</td><td data-h="pitzDaily"><code>default Gauss linear;</code></td></tr>
+<tr><td data-h="Term"><b class="tm-diff">Diffusion</b></td><td data-h="In the equation">\(\nabla\cdot(\nu\nabla\mathbf{u})\)</td><td data-h="fvSchemes"><code>laplacianSchemes</code></td><td data-h="pitzDaily"><code>default Gauss linear corrected;</code></td></tr>
+<tr><td data-h="Term"><b class="tm-diff">The small viscous parts</b></td><td data-h="In the equation">the remaining viscous contributions Versteeg moved into \(S_M\)</td><td data-h="fvSchemes">tutorials still carry <code>div((nuEff*dev2(T(grad(U)))))</code>, but OpenFOAM-14 does not read it: this term uses <code>gradSchemes</code> and <code>interpolationSchemes</code></td><td data-h="pitzDaily"><code>Gauss linear;</code> (legacy line, not used)</td></tr>
+<tr><td data-h="Term"><b class="tm-src">Source</b></td><td data-h="In the equation">body-force part of \(S_M\)</td><td data-h="fvSchemes">configured separately: <code>fvModels</code> or <code>fvConstraints</code></td><td data-h="pitzDaily">none (your precursor: <code>meanVelocityForce</code>)</td></tr>
+</tbody>
+</table></details><details class="deeper"><summary>Technical notes &amp; course context <span>Go further</span></summary><div class="detail-body"><p>OpenFOAM asks you to choose a numerical method for each kind of term. The names in <code>system/fvSchemes</code> follow the terms on this page. Example: the OpenFOAM-14 tutorial <code>incompressibleFluid/pitzDaily</code>.</p><div class="callout of"><b class="h">Two words to recognise</b>
+<p><code>Gauss</code> in an entry means: use the divergence theorem of section 05, so each term becomes a sum over cell faces. <code>phi</code> is the flux through each face, the \(\mathbf{n}\cdot\mathbf{u}\,dA\) of the integral form. <code>nuEff</code> is the viscosity the solver uses: molecular \(\nu\) plus the turbulent part from module C1.</p></div><p class="muted" style="font-size:14px">Read from the local install: <code>/opt/openfoam14/tutorials/incompressibleFluid/pitzDaily/system/fvSchemes</code>.</p></div></details></section>
+<!-- ============ 08 CHECK ============ -->
+<section id="s8">
+<div class="dmc">DM-08</div>
+<h2>Check yourself</h2>
+<div class="checks">
+<details class="check"><summary>A converged steady result has 1.0 kg/s entering and 0.9 kg/s leaving. Can steady storage explain the difference?</summary><div class="ans"><p>No. Steady storage is zero. Account for every opening and any allowed mass source; otherwise this is a mass-balance error.</p></div></details>
+<details class="check"><summary>A fluid particle warms as it moves through a steady temperature field. Does steady mean its material derivative is zero?</summary><div class="ans"><p>No. Local time change is zero, but convective change can be nonzero. The particle moves into a different temperature region.</p></div></details>
+<details class="check"><summary>A channel has a pressure gradient and constant downstream velocity profile. Must the pressure term be zero?</summary><div class="ans"><p>No. In fully developed straight-channel flow, the pressure term balances viscous effects. The acceleration vanishes because the forces balance.</p></div></details>
+<details class="check"><summary>For two neighboring cells, a shared-face flux contributes +3 to outward flow from one cell. What is its outward contribution to the other?</summary><div class="ans"><p>−3, with a consistent face orientation. The shared internal contribution cancels when the two balances are added.</p></div></details>
+<details class="check"><summary>Heating changes the water viscosity strongly and creates buoyancy. Can temperature still be treated as a passive field without checking the error?</summary><div class="ans"><p>No. These mechanisms feed temperature back into momentum. The one-way flow-then-temperature assumption needs reassessment; a coupled model may be required.</p></div></details>
+</div>
+<aside class="engineering"><span class="tiny">BEFORE YOU MOVE ON</span><p>Explain each answer in your own words. If you get stuck, return to the matching experiment rather than memorizing the sentence.</p></aside></section>
+<!-- ============ 09 SOURCES ============ -->
+<section id="s9"><div class="dmc">DM-09</div><h2>Sources &amp; provenance</h2><details class="deeper"><summary>Books, source pages &amp; model provenance</summary>
+
+
+<ul class="sources">
+<li>Versteeg, H.K. &amp; Malalasekera, W. (1995). <i>An Introduction to Computational Fluid Dynamics: The Finite Volume Method</i>, 1st ed. Longman. Ch. 2: p. 10 (three laws); Eq. 2.4 p. 12 (mass); Eqs. 2.5–2.7 p. 13 (incompressible, material derivative); Eq. 2.10 p. 14 (conservative form); p. 15 (surface and body forces); Eq. 2.25 p. 20 (temperature); p. 21 (equations of state; energy decoupled without density change); Eq. 2.33 p. 23 (momentum source); Table 2.1 and Eq. 2.37 p. 24; Eqs. 2.39–2.42 pp. 25–26 (transport equation, integral form).</li>
+<li>Pope, S.B. (2000). <i>Turbulent Flows</i>. Cambridge University Press. Eq. 2.12 p. 13; Eq. 2.17 p. 14; Eqs. 2.34–2.35 p. 17; §2.5 pp. 18–19 (pressure Poisson equation; body force into modified pressure); Eq. 2.54 p. 21.</li>
+<li>Your thesis proposal rev 2.2: <code>~/Projects/msc-research/reports/thesis-proposal-2026-10/proposal.md</code> §5.4 (water at 24 °C), §7.1 (two-step flow then temperature; <code>meanVelocityForce</code>).</li>
+<li>OpenFOAM-14 tutorial <code>incompressibleFluid/pitzDaily</code>, <code>system/fvSchemes</code> (local install).</li>
+<li>Fig. 2: exact solution for a Gaussian patch, \(T \propto (\sigma_0/\sigma)\exp(-(x-Ut)^2/2\sigma^2)\) with \(\sigma^2 = \sigma_0^2 + 2\alpha t\). Fig. 3: start-up flow between plates, solved by finite differences; the steady parabola is the exact limit. Fig. 4: coarse-grid illustration only.</li>
+</ul>
+</details></section>
+<!-- ============ 10 WORDS ============ -->
+<section id="s10"><div class="dmc">DM-10</div><h2>Words to keep</h2><details class="deeper"><summary>Open the chapter glossary</summary>
+
+
+<dl class="gloss">
+<dt>conservation law</dt><dd>A rule that a quantity (mass, momentum, energy) changes only by defined causes.</dd>
+<dt>control volume, box</dt><dd>A fixed region of space that fluid flows through. A CFD cell is one.</dd>
+<dt>rate of change term</dt><dd>How fast the amount in a fixed box changes. Zero in a steady flow.</dd>
+<dt>convection</dt><dd>Transport of a quantity by the flow itself. (Some books say advection.)</dd>
+<dt>diffusion</dt><dd>Spreading by molecular mixing, from high to low values. Viscosity for momentum, conduction for heat.</dd>
+<dt>source</dt><dd>A quantity made or removed inside the box, for example a body force or a heater.</dd>
+<dt>divergence (∇·, div)</dt><dd>Net flow out of a point, per unit volume.</dd>
+<dt>gradient (∇, grad)</dt><dd>How fast a value changes in each direction.</dd>
+<dt>Laplacian (∇²)</dt><dd>Positive where a value is below the mean of its neighbours. The form diffusion takes when its coefficient is constant.</dd>
+<dt>material derivative (D/Dt)</dt><dd>Rate of change seen by a moving particle.</dd>
+<dt>conservative form</dt><dd>An equation written as a balance for a fixed box: rate of change + net flux out = sources.</dd>
+<dt>Navier–Stokes equations</dt><dd>The momentum equations for a fluid whose viscous stress follows Newton's law of viscosity.</dd>
+<dt>surface force, body force</dt><dd>Forces on the faces of the box (pressure, viscous) and on the fluid inside it (gravity).</dd>
+<dt>general transport equation</dt><dd>One equation shape that holds mass, momentum and temperature with different φ, Γ and S.</dd>
+<dt>Gauss divergence theorem</dt><dd>A divergence summed over a volume equals the flux summed over its faces.</dd>
+<dt>flux</dt><dd>The amount of a quantity that crosses a face per unit time.</dd>
+<dt>Poisson equation for pressure</dt><dd>The equation that fixes pressure from the velocity field, so that mass stays conserved.</dd>
+<dt><code>phi</code></dt><dd>OpenFOAM's name for the flux through each cell face.</dd>
+</dl>
+<p class="muted" style="font-size:14px">The text follows most ASD-STE100 rules. Where a rule and a standard term disagree, the standard term wins. The text was not checked against the official ASD-STE100 dictionary.</p>
+
+</details></section>
+<nav aria-label="Modules" class="pager">
+<a class="pv" href="a01-continuum-and-properties.html"><span>← Previous</span><b>A1 The fluid as a continuum</b></a>
+
+<a class="nx" href="../index.html"><span>Return →</span><b>Field Notes home</b></a></nav></main>
+<script src="../assets/vendor/katex/katex.min.js"></script>
+<script src="../assets/vendor/katex/contrib/auto-render.min.js"></script>
+<script src="../assets/course.js"></script>
+<script>
+(function () {
+  const C = Course, css = C.css;
+  const font = (s, w) => (w || 400) + ' ' + s + 'px "JetBrains Mono", monospace';
+  const dfont = (s) => '600 ' + s + 'px "Barlow Condensed", "Arial Narrow", sans-serif';
+
+  /* ================= Fig 1: the box (oblique 3-D view) ================= */
+  (function () {
+    const cv = document.getElementById('box'), wrap = document.getElementById('boxwrap');
+    const read = document.getElementById('boxread'), say = document.getElementById('boxsay');
+    const narrow = (cv.clientWidth || 600) < 560;
+    let mode = 'gas', rin = 20, rout = 12, accIn = 0, accOut = 0, phase = '';
+    const rnd = C.rng(5);
+    const inside = Array.from({ length: 120 }, () => ({ x: rnd(), y: rnd(), z: rnd(), vx: rnd() - .5, vy: rnd() - .5, vz: rnd() - .5 }));
+    const travelIn = [], travelOut = [];
+    const sIn = C.range('min', (v) => v + ' /s', (v) => { rin = v; if (mode === 'liq') { rout = v; sOut.set(v); } fig.kick(); });
+    const sOut = C.range('mout', (v) => v + ' /s', (v) => { if (mode === 'liq') { sOut.set(rin); return; } rout = v; fig.kick(); });
+    C.seg(document.getElementById('mfl'), (v) => { mode = v; if (v === 'liq') { rout = rin; sOut.set(rin); } else { rout = sOut.value; } sOut.el.disabled = v === 'liq'; fig.kick(); });
+    const MAXN = 420, MINN = 15;
+    function draw(g, w, h, t, dt) {
+      const ink = css('--ink'), muted = css('--muted'), rule = css('--rule'), flow = css('--flow'), heat = css('--heat'), paper = css('--paper'), panel = css('--panel'), ok = css('--ok');
+      /* model: emit units in and out at the set rates */
+      const effOut = mode === 'liq' ? rin : rout;
+      accIn += rin * dt; accOut += effOut * dt;
+      while (accIn >= 1) { accIn -= 1; travelIn.push({ s: 0 }); }
+      while (accOut >= 1) { accOut -= 1; if (inside.length > MINN || mode === 'liq') { const q = inside.splice(Math.floor(rnd() * inside.length), 1)[0]; if (q) travelOut.push({ s: 0, y0: q.y, z0: q.z, x0: q.x }); } }
+      for (let i = travelIn.length - 1; i >= 0; i--) { const q = travelIn[i]; q.s += dt * 1.6; if (q.s >= 1) { travelIn.splice(i, 1); if (inside.length < MAXN) inside.push({ x: 0.02, y: 0.5 + (rnd() - .5) * .2, z: 0.5 + (rnd() - .5) * .2, vx: 0.5 + rnd() * .3, vy: rnd() - .5, vz: rnd() - .5 }); } }
+      for (let i = travelOut.length - 1; i >= 0; i--) { const q = travelOut[i]; q.s += dt * 1.6; if (q.s >= 1.6) travelOut.splice(i, 1); }
+      inside.forEach((q) => { q.x += q.vx * dt * .5; q.y += q.vy * dt * .5; q.z += q.vz * dt * .5; ['x', 'y', 'z'].forEach((k) => { const vk = 'v' + k; if (q[k] < 0.02) { q[k] = 0.02; q[vk] = Math.abs(q[vk]); } if (q[k] > 0.98) { q[k] = 0.98; q[vk] = -Math.abs(q[vk]); } }); q.vx *= 0.995; });
+      /* projection: cabinet oblique */
+      const S = narrow ? (w - 20) / 3.0 : Math.min(h * 0.55, 190), dep = 0.45;
+      const cx = narrow ? 10 + 0.75 * S : w * 0.5 - S * 0.62, cy = h * 0.5 + S * 0.42;
+      const P = (x, y, z) => [cx + x * S + y * S * dep * 0.866, cy - z * S - y * S * dep * 0.5];
+      g.clearRect(0, 0, w, h);
+      const poly = (pts, fill, stroke, alpha) => { g.beginPath(); pts.forEach((p, i) => { const [a, b] = P(...p); i ? g.lineTo(a, b) : g.moveTo(a, b); }); g.closePath(); if (fill) { g.globalAlpha = alpha || 1; g.fillStyle = fill; g.fill(); g.globalAlpha = 1; } if (stroke) { g.strokeStyle = stroke; g.stroke(); } };
+      /* back faces */
+      poly([[0, 1, 0], [1, 1, 0], [1, 1, 1], [0, 1, 1]], panel, rule);
+      poly([[0, 0, 0], [0, 1, 0], [0, 1, 1], [0, 0, 1]], panel, rule, 0.8);
+      poly([[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], panel, rule, 0.9);
+      /* pipes: inlet on W face, outlet on E face, at y=0.5,z=0.5 */
+      const pipe = (x0, x1, col) => { const r = 0.12, [a0, b0] = P(x0, 0.5, 0.5), [a1, b1] = P(x1, 0.5, 0.5); g.fillStyle = col; g.globalAlpha = 0.25; g.fillRect(Math.min(a0, a1), b0 - r * S, Math.abs(a1 - a0), 2 * r * S); g.globalAlpha = 1; g.strokeStyle = col; g.beginPath(); g.moveTo(a0, b0 - r * S); g.lineTo(a1, b1 - r * S); g.moveTo(a0, b0 + r * S); g.lineTo(a1, b1 + r * S); g.stroke(); };
+      pipe(-0.75, 0, flow); pipe(1, 1.75, flow);
+      /* inside dots, sorted back to front */
+      inside.slice().sort((a, b) => b.y - a.y).forEach((q) => { const [a, b] = P(q.x, q.y, q.z); g.fillStyle = flow; g.globalAlpha = 0.45 + 0.5 * (1 - q.y); g.beginPath(); g.arc(a, b, 2.2, 0, 6.283); g.fill(); });
+      g.globalAlpha = 1;
+      travelIn.forEach((q) => { const [a, b] = P(-0.75 + 0.75 * q.s, 0.5, 0.5); g.fillStyle = flow; g.beginPath(); g.arc(a, b, 2.6, 0, 6.283); g.fill(); });
+      travelOut.forEach((q) => { const f = Math.min(1, q.s / 0.6); const x = q.s < 0.6 ? C.lerp(q.x0, 1, f) : 1 + 0.75 * (q.s - 0.6); const y = q.s < 0.6 ? C.lerp(q.y0, .5, f) : .5, z = q.s < 0.6 ? C.lerp(q.z0, .5, f) : .5; const [a, b] = P(x, y, z); g.fillStyle = heat; g.beginPath(); g.arc(a, b, 2.6, 0, 6.283); g.fill(); });
+      /* front faces: glass */
+      poly([[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], paper, ink, 0.12);
+      poly([[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]], paper, ink, 0.08);
+      poly([[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], paper, ink, 0.1);
+      g.lineWidth = 2; g.strokeStyle = ink; poly([[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], null, ink); g.lineWidth = 1;
+      /* labels */
+      g.fillStyle = muted; g.font = dfont(14); g.textAlign = 'center';
+      let [a, b] = P(0, 0, 0); g.fillText('W', a - 10, b + 16); [a, b] = P(1, 0, 0); g.fillText('E', a + 10, b + 16);
+      [a, b] = P(-0.75, 0.5, 0.5); g.textAlign = 'left'; g.fillStyle = flow; g.fillText('IN ' + rin + '/s', a, b - 0.12 * S - 8);
+      [a, b] = P(1.75, 0.5, 0.5); g.textAlign = 'right'; g.fillStyle = heat; g.fillText('OUT ' + effOut + '/s', a, b - 0.12 * S - 8);
+      /* mass gauge */
+      if (!narrow) { /* mass gauge (the readout carries it on a phone) */
+        const gx = w - 60, gy = 20, gh = h - 60;
+        g.strokeStyle = rule; g.strokeRect(gx + .5, gy + .5, 22, gh);
+        const f = inside.length / MAXN; g.fillStyle = mode === 'liq' ? ok : flow; g.fillRect(gx + 2, gy + gh - f * gh + 1, 19, f * gh - 2);
+        g.fillStyle = muted; g.font = font(11); g.textAlign = 'center'; g.fillText('mass', gx + 11, gy + gh + 16);
+      }
+      const dm = rin - effOut;
+      read.innerHTML = 'mass in box <b>' + inside.length + '</b> · in <b>' + rin + '/s</b> · out <b>' + effOut + '/s</b> · rate of change = in − out <b>' + (dm > 0 ? '+' : '') + dm + '/s</b>' + (mode === 'liq' ? ' · <b>liquid: out is locked to in</b>' : '') + (inside.length >= MAXN ? ' · <b>box full</b>' : inside.length <= MINN ? ' · <b>box nearly empty</b>' : '');
+      const ph = mode === 'liq' ? 'Liquid: mass out equals mass in, density constant' : dm > 0 ? 'Gas: mass builds up, density rises' : dm < 0 ? 'Gas: mass drains, density falls' : 'Gas: in equals out, steady';
+      if (ph !== phase) { phase = ph; C.say(say, ph); }
+    }
+    const fig = C.anim(cv, { height: narrow ? 220 : 330, draw });
+  })();
+
+  /* ================= Fig 2: blob past a probe ================= */
+  (function () {
+    const cv = document.getElementById('blob'), read = document.getElementById('blobread');
+    let diff = false; const U = 1, S0 = 0.55, XP = 6, X0 = 1.5, L = 10, TL = 9, AL = 0.06;
+    C.seg(document.getElementById('bdif'), (v) => { diff = v === 'on'; fig.kick(); });
+    const sig = (t) => Math.sqrt(S0 * S0 + 2 * (diff ? AL : 0) * t);
+    const Tf = (x, t) => { const s = sig(t); return (S0 / s) * Math.exp(-((x - X0 - U * t) ** 2) / (2 * s * s)); };
+    function draw(g, w, h, tg, dt) {
+      const t = C.reduce ? 4.0 : tg % TL;
+      const ink = css('--ink'), muted = css('--muted'), rule = css('--rule'), flow = css('--flow'), heat = css('--heat'), paper = css('--paper'), warn = css('--warn');
+      g.clearRect(0, 0, w, h);
+      const ox = 40, pw = w - ox - 14, xo = (x) => ox + pw * x / L, bandY = 26, bandH = 40;
+      /* temperature band */
+      for (let i = 0; i < pw; i += 2) { const x = (i / pw) * L, v = Tf(x, t); g.fillStyle = heat; g.globalAlpha = 0.05 + 0.9 * v; g.fillRect(ox + i, bandY, 2, bandH); }
+      g.globalAlpha = 1; g.strokeStyle = rule; g.strokeRect(ox + .5, bandY + .5, pw, bandH);
+      g.fillStyle = muted; g.font = font(11); g.textAlign = 'left'; g.fillText('flow →', ox, bandY - 8);
+      /* probe + particle */
+      const qx = xo(XP); g.fillStyle = warn; g.beginPath(); g.moveTo(qx, bandY + bandH / 2 - 8); g.lineTo(qx + 8, bandY + bandH / 2); g.lineTo(qx, bandY + bandH / 2 + 8); g.lineTo(qx - 8, bandY + bandH / 2); g.closePath(); g.fill();
+      const px = xo(X0 + U * t); g.fillStyle = paper; g.strokeStyle = ink; g.lineWidth = 2; g.beginPath(); g.arc(px, bandY + bandH / 2, 6, 0, 6.283); g.fill(); g.stroke(); g.lineWidth = 1;
+      /* time plot */
+      const py = bandY + bandH + 30, ph = h - py - 30, to = (tt) => ox + pw * tt / TL, yo = (v) => py + ph * (1 - v);
+      g.fillStyle = paper; g.fillRect(ox, py, pw, ph); g.strokeStyle = rule; g.strokeRect(ox + .5, py + .5, pw, ph);
+      const curve = (fn, col, n) => { g.strokeStyle = col; g.lineWidth = 2; g.beginPath(); for (let i = 0; i <= n; i++) { const tt = t * i / n, v = fn(tt); i ? g.lineTo(to(tt), yo(v)) : g.moveTo(to(tt), yo(v)); } g.stroke(); g.lineWidth = 1; };
+      curve((tt) => Tf(XP, tt), warn, 160); curve((tt) => Tf(X0 + U * tt, tt), ink, 60);
+      g.fillStyle = muted; g.textAlign = 'right'; g.fillText('1', ox - 6, py + 10); g.fillText('0', ox - 6, py + ph); g.textAlign = 'center'; g.fillText('time →', ox + pw / 2, py + ph + 16);
+      g.textAlign = 'left'; g.fillStyle = ink; g.fillText('particle', ox + 8, py + 14); g.fillStyle = warn; g.fillText('◆ probe', ox + 80, py + 14);
+      /* terms at the probe */
+      const s = sig(t), xr = XP - X0 - U * t, T = Tf(XP, t);
+      const dTdx = -T * xr / (s * s), d2 = T * (xr * xr / (s * s) - 1) / (s * s);
+      const conv = U * dTdx, ddt = (diff ? AL : 0) * d2 - conv;
+      read.innerHTML = 'at the probe: <span class="tm-time">∂T/∂t</span> <b>' + ddt.toFixed(3) + '</b> + <span class="tm-conv">u·∇T</span> <b>' + conv.toFixed(3) + '</b> = DT/Dt <b>' + (ddt + conv).toFixed(3) + '</b>' + (diff ? ' (= <span class="tm-diff">α∇²T</span>)' : ' (zero: no diffusion)');
+    }
+    const fig = C.anim(cv, { height: 250, draw });
+  })();
+
+  /* ================= Fig 3: term lab (start-up flow between plates) ================= */
+  (function () {
+    const cv = document.getElementById('lab'), wrap = document.getElementById('labwrap');
+    const read = document.getElementById('labread'), say = document.getElementById('labsay');
+    const narrow = (cv.clientWidth || 600) < 560;
+    const NU = 9.131e-7, RHO = 997.3, H = 2e-3, N = 41, DY = H / (N - 1), UMAX = 0.01;
+    const G = 8 * NU * UMAX / (H * H); // m/s², so that the steady centre speed is 1 cm/s
+    const SLOW = 0.25, DTMAX = 0.4 * DY * DY / NU;
+    let u = new Float64Array(N), tSim = 0, pOn = true, vOn = true, phase = '', steadyFor = 0;
+    const tour = C.tour(wrap.parentElement);
+    const restart = () => { u = new Float64Array(N); tSim = 0; steadyFor = 0; fig.kick(); };
+    C.seg(document.getElementById('lp'), (v) => { pOn = v === 'on'; steadyFor = 0; fig.kick(); });
+    C.seg(document.getElementById('lv'), (v) => { vOn = v === 'on'; steadyFor = 0; fig.kick(); });
+    document.getElementById('lrst').addEventListener('click', restart);
+    function step(dtReal) {
+      let rem = dtReal * SLOW; const nu = vOn ? NU : 0, gp = pOn ? G : 0;
+      while (rem > 1e-12) {
+        const dt = Math.min(DTMAX, rem); rem -= dt; const un = u.slice();
+        for (let i = 1; i < N - 1; i++) un[i] = u[i] + dt * (gp + nu * (u[i + 1] - 2 * u[i] + u[i - 1]) / (DY * DY));
+        un[0] = 0; un[N - 1] = 0; if (!vOn) { un[0] = un[1]; un[N - 1] = un[N - 2]; } // no friction: the wall cannot hold the fluid back
+        u = un; tSim += dt;
+      }
+    }
+    function draw(g, w, h, t, dt) {
+      if (dt > 0) step(dt);
+      const ink = css('--ink'), muted = css('--muted'), rule = css('--rule'), paper = css('--paper');
+      const cT = css('--c-time'), cC = css('--c-conv'), cP = css('--c-press'), cD = css('--c-diff');
+      g.clearRect(0, 0, w, h);
+      /* profile panel */
+      const pw = narrow ? w - 20 : w * 0.52, ph = narrow ? 200 : h - 50, ox = 10, oy = 18;
+      const vmax = 0.0125, xo = (v) => ox + 30 + (pw - 40) * Math.min(v, vmax * 1.6) / vmax, yo = (i) => oy + ph - ph * i / (N - 1);
+      g.fillStyle = muted; g.fillRect(ox, oy - 6, pw, 6); g.fillRect(ox, oy + ph, pw, 6);
+      g.fillStyle = paper; g.fillRect(ox, oy, pw, ph);
+      g.strokeStyle = ink; g.beginPath(); g.moveTo(ox + 30, oy); g.lineTo(ox + 30, oy + ph); g.stroke();
+      /* steady parabola */
+      g.setLineDash([5, 4]); g.strokeStyle = muted; g.beginPath();
+      for (let i = 0; i < N; i++) { const y = i * DY, us = G / (2 * NU) * y * (H - y); i ? g.lineTo(xo(us), yo(i)) : g.moveTo(xo(us), yo(i)); } g.stroke(); g.setLineDash([]);
+      /* current profile + arrows */
+      g.strokeStyle = cC; g.lineWidth = 2.2; g.beginPath(); for (let i = 0; i < N; i++) { i ? g.lineTo(xo(u[i]), yo(i)) : g.moveTo(xo(u[i]), yo(i)); } g.stroke(); g.lineWidth = 1;
+      g.strokeStyle = cC; g.globalAlpha = 0.5; for (let i = 2; i < N - 1; i += 4) { g.beginPath(); g.moveTo(ox + 30, yo(i)); g.lineTo(xo(u[i]), yo(i)); g.stroke(); } g.globalAlpha = 1;
+      g.fillStyle = muted; g.font = font(11); g.textAlign = 'left'; g.fillText('wall', ox + 34, oy - 9); g.fillText('wall', ox + 34, oy + ph + 18);
+      g.textAlign = 'right'; g.fillText('steady: dashed', ox + pw - 4, oy + 14);
+      g.fillText('1 cm/s', xo(0.01) + 4, oy + ph - 4);
+      g.beginPath(); g.moveTo(xo(0.01), oy + ph); g.lineTo(xo(0.01), oy + ph - 14); g.strokeStyle = muted; g.stroke();
+      /* force balance per m² of plate */
+      const tw = vOn ? RHO * NU * (-3 * u[0] + 4 * u[1] - u[2]) / (2 * DY) : 0; // wall shear, one wall (2nd order: exact for the parabola)
+      const push = pOn ? RHO * G * H : 0, fric = 2 * tw, net = push - fric;
+      const bx = narrow ? 20 : ox + pw + 50, by = narrow ? oy + ph + 46 : oy + 10, bw = narrow ? w - 40 : w - bx - 20, bh = 26, gap = 18;
+      const FM = RHO * G * H * 1.15, xb = (v) => bw * Math.min(Math.abs(v), FM) / FM;
+      g.font = dfont(14); g.textAlign = 'left';
+      const bar = (row, val, col, label) => { const y = by + row * (bh + gap + 14); g.textAlign = 'left'; g.fillStyle = muted; g.font = dfont(14); g.fillText(label, bx, y); g.textAlign = 'right'; g.fillStyle = ink; g.font = font(12); g.fillText(C.sci(val, 3) + ' N/m²', bx + bw, y); g.fillStyle = rule; g.fillRect(bx, y + 6, bw, bh); g.fillStyle = col; g.fillRect(bx, y + 6, xb(val), bh); };
+      bar(0, push, cP, 'PRESSURE PUSH  ρ G h');
+      bar(1, fric, cD, 'WALL FRICTION  2 τw');
+      bar(2, net, cT, 'RATE OF CHANGE = PUSH − FRICTION');
+      bar(3, 0, cC, 'CONVECTION (ZERO HERE)');
+      const uc = u[(N - 1) / 2];
+      read.innerHTML = 'time <b>' + tSim.toFixed(2) + ' s</b> · centre speed <b>' + (uc * 100).toFixed(3) + ' cm/s</b> · wall shear τw <b>' + C.sci(tw, 3) + ' Pa</b>';
+      const ph2 = !pOn && !vOn ? 'No forces: the velocity stays as it is' : !vOn ? 'No friction: the water speeds up for ever' : !pOn ? 'No push: friction slows the water down' : Math.abs(net) < 0.02 * push ? 'Steady: push and friction balance' : 'Starting up: push is larger than friction';
+      if (ph2 !== phase) { phase = ph2; C.say(say, ph2); }
+      /* idle tour: restart after the flow has been steady for 3 s */
+      if (Math.abs(net) < 0.02 * Math.max(push, 1e-9) && pOn && vOn) steadyFor += dt; else steadyFor = 0;
+      if (tour.active() && steadyFor > 3) restart();
+      if (!vOn && uc > 0.05) { u = new Float64Array(N); tSim = 0; }
+    }
+    const fig = C.anim(cv, { height: narrow ? 520 : 300, draw });
+  })();
+
+  /* ================= Fig 4: heated band, convection vs diffusion ================= */
+  (function () {
+    const cv = document.getElementById('heat'), read = document.getElementById('heatread');
+    const NX = 90, NY = 30, LX = 3, LY = 1, DX = LX / NX, DY = LY / NY, AL = 0.004;
+    const B0 = Math.round(0.5 / DX), B1 = Math.round(2.5 / DX);
+    let T = new Float64Array(NX * NY), Ubar = 0.3;
+    const id = (i, j) => j * NX + i;
+    const uf = (j) => 6 * Ubar * ((j + .5) * DY) * (1 - (j + .5) * DY); // laminar parabola
+    const spd = (v) => 0.02 + 0.98 * Math.pow(v / 100, 1.6);
+    C.range('hs', (v) => '×' + (spd(v) / spd(45)).toFixed(2), (v) => { Ubar = spd(v); fig.kick(); });
+    Ubar = spd(45);
+    function step(dtReal) {
+      const umax = 1.5 * Ubar, dtc = Math.min(0.45 * DX / umax, 0.2 * DX * DX / AL);
+      let rem = dtReal * 1.2;
+      while (rem > 1e-9) {
+        const dt = Math.min(dtc, rem); rem -= dt; const Tn = T.slice();
+        for (let j = 0; j < NY; j++) {
+          const u = uf(j);
+          for (let i = 0; i < NX; i++) {
+            const c = T[id(i, j)];
+            const w = i > 0 ? T[id(i - 1, j)] : 0;                // inlet: cold
+            const e = i < NX - 1 ? T[id(i + 1, j)] : c;           // outlet: zero gradient
+            const n = j < NY - 1 ? T[id(i, j + 1)] : c;           // top wall: insulated
+            const s = j > 0 ? T[id(i, j - 1)] : (i >= B0 && i < B1 ? 2 - c : c); // bottom: heated band at T = 1
+            Tn[id(i, j)] = c + dt * (-u * (c - w) / DX + AL * ((e - 2 * c + w) / (DX * DX) + (n - 2 * c + s) / (DY * DY)));
+          }
+        }
+        T = Tn;
+      }
+    }
+    for (let k = 0; k < 400; k++) step(0.05);
+    function draw(g, w, h, t, dt) {
+      if (dt > 0) step(dt);
+      const ink = css('--ink'), muted = css('--muted'), rule = css('--rule'), heat = css('--heat'), paper = css('--paper'), flow = css('--flow');
+      g.clearRect(0, 0, w, h);
+      const ox = 10, oy = 16, pw = w - 20, ph = Math.min(h - 50, pw / 3), cw = pw / NX, ch = ph / NY;
+      g.fillStyle = paper; g.fillRect(ox, oy, pw, ph);
+      g.fillStyle = heat;
+      for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) { const v = T[id(i, j)]; if (v < 0.01) continue; g.globalAlpha = Math.min(1, v); g.fillRect(ox + i * cw, oy + ph - (j + 1) * ch, cw + .6, ch + .6); }
+      g.globalAlpha = 1;
+      g.fillStyle = muted; g.fillRect(ox, oy - 4, pw, 4); g.fillRect(ox, oy + ph, pw, 4);
+      g.fillStyle = heat; g.fillRect(ox + B0 * cw, oy + ph, (B1 - B0) * cw, 6);
+      /* inlet profile arrows */
+      g.strokeStyle = flow; g.lineWidth = 1.5;
+      for (let j = 2; j < NY; j += 4) { const L = 12 + 70 * uf(j) / 1.5; g.beginPath(); g.moveTo(ox + 2, oy + ph - (j + .5) * ch); g.lineTo(ox + 2 + L, oy + ph - (j + .5) * ch); g.stroke(); }
+      g.lineWidth = 1;
+      g.fillStyle = muted; g.font = font(11); g.textAlign = 'left'; g.fillText('cold inflow', ox, oy + ph + 20); g.textAlign = 'center'; g.fillText('heated band', ox + (B0 + B1) / 2 * cw, oy + ph + 20);
+      /* thermal layer at the end of the band: height where T falls to 0.1 */
+      let jj = 0; const ib = B1 - 1; while (jj < NY - 1 && T[id(ib, jj)] > 0.1) jj++;
+      const th = (jj + .5) * DY;
+      g.strokeStyle = ink; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(ox + B1 * cw, oy + ph); g.lineTo(ox + B1 * cw, oy + ph - th * ph); g.stroke(); g.setLineDash([]);
+      read.innerHTML = 'warm layer at the end of the band: <b>' + Math.round(th * 100) + '%</b> of the channel height';
+    }
+    const fig = C.anim(cv, { height: Math.round(Math.min(300, ((cv.clientWidth || 600) - 20) / 3 + 50)), draw });
+  })();
+
+  /* ================= Fig 5: one finite-volume cell (SVG) ================= */
+  (function () {
+    const box = document.getElementById('fvcell');
+    const s = C.svg('svg', { class: 'fig', viewBox: '0 0 400 270', role: 'img', 'aria-label': 'One cell with convective, diffusive and source contributions' }, box);
+    const t = (x, y, txt, col, anchor, size) => { const e = C.svg('text', { x, y, fill: col || 'var(--ink)', 'text-anchor': anchor || 'middle', 'font-family': 'Barlow Condensed, Arial Narrow, sans-serif', 'font-weight': 600, 'font-size': (size || 15) + 2, 'letter-spacing': '.04em' }, s); e.textContent = txt; return e; };
+    C.svg('rect', { x: 130, y: 60, width: 140, height: 120, fill: 'var(--paper)', stroke: 'var(--ink)', 'stroke-width': 2 }, s);
+    C.svg('rect', { x: 130, y: 180, width: 140, height: 10, fill: 'var(--heat)' }, s);
+    t(200, 210, 'HOT WALL', 'var(--heat)', 'middle', 13);
+    const arrow = (x1, y1, x2, y2, col) => { C.svg('line', { x1, y1, x2, y2, stroke: col, 'stroke-width': 3, class: 'fluxarrow' }, s); const a = Math.atan2(y2 - y1, x2 - x1), L = 10; C.svg('path', { d: `M${x2} ${y2} L${x2 - L * Math.cos(a - .45)} ${y2 - L * Math.sin(a - .45)} L${x2 - L * Math.cos(a + .45)} ${y2 - L * Math.sin(a + .45)} Z`, fill: col }, s); };
+    arrow(40, 120, 128, 120, 'var(--c-conv)'); arrow(272, 120, 360, 120, 'var(--c-conv)');
+    t(84, 108, 'IN', 'var(--c-conv)'); t(316, 108, 'OUT', 'var(--c-conv)');
+    t(84, 142, 'face W', 'var(--muted)', 'middle', 13); t(316, 142, 'face E', 'var(--muted)', 'middle', 13);
+    arrow(200, 176, 200, 140, 'var(--c-diff)'); t(278, 188, 'face S', 'var(--muted)', 'start', 13);
+    t(192, 160, 'diffusion in', 'var(--c-diff)', 'end', 13);
+    C.svg('circle', { cx: 165, cy: 92, r: 9, fill: 'var(--c-src)' }, s); t(180, 97, 'source', 'var(--c-src)', 'start', 13);
+    t(200, 34, 'CHANGE INSIDE = IN − OUT + DIFFUSION IN + SOURCE', 'var(--c-time)', 'middle', 14);
+    t(200, 250, 'n points out of every face', 'var(--muted)', 'middle', 13);
+  })();
+
+  /* ================= Fig 6: equations vs unknowns (SVG) ================= */
+  (function () {
+    const box = document.getElementById('count');
+    let heat = false;
+    function build() {
+      box.innerHTML = '';
+      const rows = heat ? 5 : 4, H = 40 + rows * 46 + 22;
+      const s = C.svg('svg', { class: 'fig', viewBox: '0 0 400 ' + H, role: 'img', 'aria-label': 'Equations matched to unknowns' }, box);
+      const txt = (x, y, v, col, anchor, size, mono) => { const e = C.svg('text', { x, y, fill: col, 'text-anchor': anchor, 'font-family': mono ? 'JetBrains Mono, monospace' : 'Barlow Condensed, Arial Narrow, sans-serif', 'font-weight': 600, 'font-size': (size || 15) + 2 }, s); e.textContent = v; };
+      txt(80, 20, 'EQUATIONS', 'var(--muted)', 'middle', 13); txt(320, 20, 'UNKNOWNS', 'var(--muted)', 'middle', 13);
+      const E = ['Mass  ∇·u = 0', 'x-momentum', 'y-momentum', 'z-momentum'], U = ['p', 'u', 'v', 'w'];
+      if (heat) { E.push('Temperature'); U.push('T'); }
+      const cols = ['var(--c-press)', 'var(--c-conv)', 'var(--c-conv)', 'var(--c-conv)', 'var(--c-src)'];
+      E.forEach((e, i) => {
+        const y = 40 + i * 46;
+        C.svg('rect', { x: 4, y, width: 152, height: 32, rx: 3, fill: 'var(--paper)', stroke: cols[i] }, s); txt(80, y + 21, e, 'var(--ink)', 'middle', 15);
+        C.svg('rect', { x: 290, y, width: 60, height: 32, rx: 3, fill: 'var(--paper)', stroke: cols[i] }, s); txt(320, y + 22, U[i], 'var(--ink)', 'middle', 16, true);
+        C.svg('line', { x1: 156, y1: y + 16, x2: 290, y2: y + 16, stroke: cols[i], 'stroke-width': 1.5, 'stroke-dasharray': i === 0 ? '5 4' : (i === 4 ? '2 3' : '0') }, s);
+      });
+      txt(223, 40 + 11, 'fixes pressure', 'var(--c-press)', 'middle', 12);
+      if (heat) txt(223, 40 + 4 * 46 + 11, 'solved after the flow', 'var(--c-src)', 'middle', 12);
+      txt(200, H - 4, heat ? '5 equations, 5 unknowns' : '4 equations, 4 unknowns', 'var(--ink)', 'middle', 14);
+    }
+    C.seg(document.getElementById('uht'), (v) => { heat = v === 'yes'; build(); });
+    build();
+  })();
+})();
+</script>
+<div aria-hidden="true" class="reading-progress"><i></i></div><script src="../assets/field-notes.js"></script></body>
+</html>
